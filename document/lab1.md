@@ -5,6 +5,10 @@
 
 通过参考 xv6 的启动机制，理解并实现最小操作系统的引导过程，最终在 QEMU 中输出正常启动的标识。
 
+## 代码仓库
+
+https://github.com/bai-feng-yu/riscv-os/tree/Lab-1
+
 ## 实验环境
 
 - 主机操作系统：Linux
