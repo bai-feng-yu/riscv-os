@@ -16,6 +16,11 @@ void            consputc(int);
 int             consoleread(int user_dst, uint64 dst, int n);
 int             consolewrite(int user_src, uint64 src, int n);
 
+// kalloc.c
+void*           kalloc(bool in_kernel);
+void            kfree(uint64 page, bool in_kernel);
+void            kinit(void);
+
 // uart.c
 void            uartinit(void);
 void            uartintr(void);
@@ -53,6 +58,7 @@ int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
 
+
 // spinlock.c
 void            acquire(struct spinlock*);
 int             holding(struct spinlock*);
@@ -60,5 +66,15 @@ void            initlock(struct spinlock*, char*);
 void            release(struct spinlock*);
 void            push_off(void);
 void            pop_off(void);
+
+// string.c
+int             memcmp(const void*, const void*, uint);
+void*           memmove(void*, const void*, uint);
+void*           memset(void*, int, uint);
+char*           safestrcpy(char*, const char*, int);
+int             strlen(const char*);
+int             strncmp(const char*, const char*, uint);
+char*           strncpy(char*, const char*, int);
+
 
 #endif

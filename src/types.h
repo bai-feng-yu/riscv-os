@@ -10,7 +10,7 @@ typedef unsigned int  uint32;
 typedef unsigned long uint64;
 
 typedef uint64 pde_t;
-
+typedef enum {false = 0, true = 1} bool;
 struct timeval {
   uint64 tv_sec;   // 秒数
   uint64 tv_usec;  // 微秒数

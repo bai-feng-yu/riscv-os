@@ -196,10 +196,11 @@ w_pmpaddr0(uint64 x)
   asm volatile("csrw pmpaddr0, %0" : : "r" (x));
 }
 
+// satp寄存器相关
 // use riscv's sv39 page table scheme.
-#define SATP_SV39 (8L << 60)
+#define SATP_SV39 (8L << 60)  // MODE = SV39
 
-#define MAKE_SATP(pagetable) (SATP_SV39 | (((uint64)pagetable) >> 12))
+#define MAKE_SATP(pagetable) (SATP_SV39 | (((uint64)pagetable) >> 12)) // 设置MODE和PPN字段
 
 // supervisor address translation and protection;
 // holds the address of the page table.
@@ -327,7 +328,10 @@ sfence_vma()
   asm volatile("sfence.vma zero, zero");
 }
 
+// 页表项
 typedef uint64 pte_t;
+
+// 顶级页表
 typedef uint64 *pagetable_t; // 512 PTEs
 
 #endif // __ASSEMBLER__
@@ -338,17 +342,30 @@ typedef uint64 *pagetable_t; // 512 PTEs
 #define PGROUNDUP(sz)  (((sz)+PGSIZE-1) & ~(PGSIZE-1))
 #define PGROUNDDOWN(a) (((a)) & ~(PGSIZE-1))
 
-#define PTE_V (1L << 0) // valid
-#define PTE_R (1L << 1)
-#define PTE_W (1L << 2)
-#define PTE_X (1L << 3)
-#define PTE_U (1L << 4) // user can access
+// 页面权限控制
+#define PTE_V (1 << 0) // valid
+#define PTE_R (1 << 1) // read
+#define PTE_W (1 << 2) // write
+#define PTE_X (1 << 3) // execute
+#define PTE_U (1 << 4) // user
+#define PTE_G (1 << 5) // global
+#define PTE_A (1 << 6) // accessed
+#define PTE_D (1 << 7) // dirty
 
+// 获取虚拟地址中的虚拟页(VPN)信息 占9bit
+#define VA_SHIFT(level)         (12 + 9 * (level))
+#define VA_TO_VPN(va,level)     ((((uint64)(va)) >> VA_SHIFT(level)) & 0x1FF)
+
+// PA和PTE之间的转换
 // shift a physical address to the right place for a PTE.
 #define PA2PTE(pa) ((((uint64)pa) >> 12) << 10)
 
 #define PTE2PA(pte) (((pte) >> 10) << 12)
 
+// 检查一个PTE是否属于pgtbl
+#define PTE_CHECK(pte) (((pte) & (PTE_R | PTE_W | PTE_X)) == 0)
+
+// 获取低10bit的flag信息
 #define PTE_FLAGS(pte) ((pte) & 0x3FF)
 
 // extract the three 9-bit page table indices from a virtual address.
@@ -360,4 +377,6 @@ typedef uint64 *pagetable_t; // 512 PTEs
 // MAXVA is actually one bit less than the max allowed by
 // Sv39, to avoid having to sign-extend virtual addresses
 // that have the high bit set.
+// 定义一个相当大的VA, 规定所有VA不得大于它
 #define MAXVA (1L << (9 + 9 + 9 + 12 - 1))
+
