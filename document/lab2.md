@@ -5,8 +5,8 @@
 围绕 RISC-V Sv39 虚拟内存与内核内存管理：
 - 深入理解 Sv39 虚拟地址分解与 PTE 格式，掌握多级页表的工作机理。
 - 读懂并分析 xv6 的物理内存分配器与页表管理接口。
-- 设计并给出你自己的物理内存管理器与页表管理系统的接口与实现思路。
-- 在内核中启用虚拟内存（内核态）并完成分层测试与调试要点梳理。
+- 给出物理内存管理器与虚拟内存管理系统的实现。
+- 在内核中启用虚拟内存（内核态）并完成测试与调试。
 
 ## 代码仓库
 
@@ -31,14 +31,16 @@ https://github.com/bai-feng-yu/riscv-os/tree/Lab-2
 
 ### 虚拟内存管理部分
 
-- 先添加头文件部分的内容，
-- 物理地址转虚拟地址：页大小 4KB ⇒ 物理地址低 12 位是页内偏移，不存入 PTE 中（因为一旦映射就是整页对齐）。
-PTE 的低 10 位用于标志位（Valid/Read/Write/Exec/User/...）。
-因此 PPN（物理页号）要放到从 bit 10 开始的位置。
-一个物理地址 PA：
-去掉页内偏移：PA >> 12 ⇒ 得到物理页号 (PPN)。
-需要把它塞进 PTE 的 bit[53:10] ⇒ 再左移 10 比特： (PA >> 12) << 10。
+- 先前工作：
+  - 物理地址与页表项的转换。物理页大小为4KB，物理地址低12位是偏移，剩余要存入页表项中。页表项低10位用于存储标志位，故物理地址相应部分存在pte的10位之后部分。以此为基础进行转换。
+  - 提取虚拟地址对应层级的索引：((((uint64) (va)) >> (12+level*9)) & 0x1ff)
+- 物理地址映射虚拟地址：
+  - va中索引9位是因为物理页大小4KB，而页表项大小为64位，一页可存储 2^9 个页表项。 
+  - walk 用于处理虚拟地址的查询与向下映射（除了叶子的页表项，故返回叶子页表项的地址）。输入pagetable与va后，由va提取索引找到页表项，查看是否有效，无效且alloc==1则建立映射，有效之后获得页表项记录的下一级页表，重复这个过程3次。
+  - mappages 用于建立物理地址与虚拟地址的映射。利用walk，如果已有映射，那么报错；没有映射，利用walk返回的叶子页表项地址，存入物理地址的相关信息并修改标志位。
 
+- 检验结果展示：
+1.以UART0的映射为例查看walk的具体过程
 ```c
 void testvmmap()
 {
@@ -59,10 +61,12 @@ void testvmmap()
   walk(kpgtbl, UART0, 0); // 查询
 }
 ```
-
 ![alt text](image.png)
 
-![alt text](<屏幕截图 2025-09-29 142548.png>)
+2.老师测例结果
+
+![alt text](<屏幕截图 2025-09-29 154327.png>)
+
 ## 问题回答
 
 ### 任务1：深入理解 Sv39 页表机制
@@ -132,12 +136,11 @@ struct run {
   - 优点：实现简单、常数开销小、速度快；
   - 缺点：仅支持页粒度，无法避免外部碎片；不支持不同尺寸、统计/泄漏检测弱。
 
-#### 设计思考（扩展）
+#### 设计思考
 - 内存统计如何扩展？
   - 维护 `free_pages`、`total_pages` 计数；kalloc/kfree 时自增自减；可暴露 `/proc` 风格接口或调试打印。
 - 如何检测内存泄漏？
-  - 维护分配账本（如哈希表）记录分配回溯或序号；关机/阶段性检查未归还项；
-  - 编译期宏切换以减少发布版开销。
+  - 维护分配账本（如哈希表）记录分配回溯或序号；关机/阶段性检查未归还项。
 - 更高效的分配算法：
   - 伙伴系统（buddy）用于页级分配，支持连续多页且合并/拆分高效；
   - slab/obj cache 支持对象级（小块）分配，减少内部碎片与构造/析构成本。
@@ -146,15 +149,6 @@ struct run {
 
 ### 任务3：设计你的物理内存管理器
 
-#### 设计要求与接口（建议）
-```c
-// 必选接口
-void   pmm_init(void);
-void*  alloc_page(void);
-void   free_page(void* page);
-// 可选：连续分配
-void*  alloc_pages(int n);
-```
 - 1) 如何确定可用内存范围？
   - 读取设备树/引导信息或固定平台常量（如从 `end` 到 `PHYSTOP`）；
   - 统一向上页对齐作为起始；过滤设备/保留区间。
@@ -163,12 +157,7 @@ void*  alloc_pages(int n);
   - 进阶：采用伙伴系统合并相邻空闲块，`alloc_pages(n)` 支持连续页需求；
   - 长期：小对象用 slab，降低内部碎片。
 - 3) 是否支持不同大小的分配？
-  - 视需求启用 slab 或 kmalloc/kfree 风格接口，在页级 PMM 之上叠加。
-
-#### 实现策略（建议）
-- 步骤 1：实现最简单的单链表（与 xv6 类似），完成 pmm_init/kalloc/kfree；
-- 步骤 2：添加错误检查（越界/未对齐/double-free 粗检——比如在空闲页写入魔数并在释放时校验）；
-- 步骤 3：若需性能与功能，切换/叠加伙伴系统与 slab。
+  - 视需求启用 slab 或 kmalloc/kfree 风格接口，在页级 PMM 之上叠加。目前未支持。
 
 ---
 
@@ -209,184 +198,14 @@ void*  alloc_pages(int n);
 - 如何确保页表一致性？
   - 修改页表后执行 `sfence.vma`（或针对 VA 的局部刷新）；
   - 多核场景下在恰当位置加锁或停核，避免并发修改导致的可见性问题。
-
----
-
-### 任务5：实现你的页表管理系统（接口与步骤）
-
-#### 核心类型与接口（建议）
-```c
-// 页表类型定义
-typedef uint64* pagetable_t;
-
-// 基本操作接口
-pagetable_t create_pagetable(void);
-int         map_page(pagetable_t pt, uint64 va, uint64 pa, int perm);
-void        destroy_pagetable(pagetable_t pt);
-
-// 辅助函数（内部使用）
-pte_t*      walk_create(pagetable_t pt, uint64 va);
-pte_t*      walk_lookup(pagetable_t pt, uint64 va);
-```
-
-#### 实现步骤
-1) 地址解析实现
-```c
-// 从虚拟地址提取各级索引
-#define VPN_SHIFT(level) (12 + 9 * (level))
-#define VPN_MASK(va, level) (((va) >> VPN_SHIFT(level)) & 0x1FF)
-```
-2) 页表遍历实现
-- 从根页表开始逐级查找（level=2→1→0）；
-- 每级检查 PTE.V；无效且需要时分配中间级页表；
-- 返回叶子级 PTE 指针。
-
-3) 映射建立实现
-- 确保 VA/PA 对齐；
-- 正确设置权限位（R/W/X/U/V）；
-- 处理映射冲突（已映射则返回错误或按策略更新）。
-
-#### 调试检查点
-```c
-// 实现页表打印功能用于调试
-void dump_pagetable(pagetable_t pt, int level) {
-    // 递归打印页表内容
-    // 显示虚拟地址到物理地址的映射关系
-    // 标明权限位设置
-}
-```
-
-TODO: 页表打印输出示例截图
-
----
-
-### 任务6：启用虚拟内存（内核态）
-
-#### 参考 xv6 的初始化路径
-- kvminit() 创建并填充内核页表：
-  - 映射内核代码段（R+X）、数据段（R+W）、设备内存（UART 等，R+W）。
-  - 采用恒等映射（VA=PA）便于早期调试与设备访问。
-- kvminithart() 激活页表：
-  - satp = MODE(Sv39, 8) | 根页表 PPN；
-  - 执行 `sfence.vma` 刷新 TLB；
-  - 注意在切换前栈/代码/设备必须可达。
-
-#### 代码骨架（示例）
-```c
-void kvminit(void) {
-    // 1. 创建内核页表
-    kernel_pagetable = create_pagetable();
-
-    // 2. 映射内核代码段（R+X 权限）
-    map_region(kernel_pagetable, KERNBASE, KERNBASE,
-               (uint64)etext - KERNBASE, PTE_R | PTE_X);
-
-    // 3. 映射内核数据段（R+W 权限）
-    map_region(kernel_pagetable, (uint64)etext, (uint64)etext,
-               PHYSTOP - (uint64)etext, PTE_R | PTE_W);
-
-    // 4. 映射设备（UART 等）
-    map_region(kernel_pagetable, UART0, UART0, PGSIZE, PTE_R | PTE_W);
-}
-
-void kvminithart(void) {
-    // 激活内核页表
-    w_satp(MAKE_SATP(kernel_pagetable));
-    sfence_vma();
-}
-```
-
-#### 关键技术细节
-- SATP 格式：`MODE[63:60] | ASID[59:44] | PPN[43:0]`，其中 MODE=8 表示 Sv39；
-- `sfence.vma` 刷新 TLB，保证新映射生效；
-- 多核时每个 hart 都需加载 satp 并 sfence。
-
-TODO: 启用前后串口输出/访存验证截图
-
----
-
-## 测试与调试策略
-
-### 1) 物理内存分配器测试
-```c
-void test_physical_memory(void) {
-    void *page1 = alloc_page();
-    void *page2 = alloc_page();
-    assert(page1 != page2);
-    assert(((uint64)page1 & 0xFFF) == 0); // 页对齐
-
-    *(int*)page1 = 0x12345678;
-    assert(*(int*)page1 == 0x12345678);
-
-    free_page(page1);
-    void *page3 = alloc_page();
-    free_page(page2);
-    free_page(page3);
-}
-```
-
-### 2) 页表功能测试
-```c
-void test_pagetable(void) {
-    pagetable_t pt = create_pagetable();
-
-    uint64 va = 0x10000000;
-    uint64 pa = (uint64)alloc_page();
-    assert(map_page(pt, va, pa, PTE_R | PTE_W) == 0);
-
-    pte_t *pte = walk_lookup(pt, va);
-    assert(pte != 0 && (*pte & PTE_V));
-    assert(PTE_PA(*pte) == pa);
-
-    assert(*pte & PTE_R);
-    assert(*pte & PTE_W);
-    assert(!(*pte & PTE_X));
-}
-```
-
-### 3) 虚拟内存激活测试
-```c
-void test_virtual_memory(void) {
-    printf("Before enabling paging...\n");
-    kvminit();
-    kvminithart();
-    printf("After enabling paging...\n");
-    // 测试代码/数据/设备访问
-}
-```
-
-### 常见问题诊断
-- 启用分页后系统崩溃：
-  - 检查代码段/数据段/栈是否映射；设备地址是否映射；
-  - 在启用前后打印关键地址映射状态。
-- 页表映射失败：
-  - 检查 VA/PA 对齐；中间页表是否分配成功；权限位冲突或重复映射。
-- 地址转换错误：
-  - 核对 VPN 提取算法与 PTE 格式；确认物理地址计算是否正确。
-
-### GDB 调试技巧
-```bash
-# 查看页表内容（根据调试环境替换命令）
-(gdb) x/64gx $satp_register_content
-# 查看特定虚拟地址映射（qemu monitor）
-(gdb) monitor info mem
-# 跟踪页表遍历
-(gdb) b walk_create
-(gdb) watch $a0
-```
-
-### 性能优化考虑
-- 内存分配：批量分配、伙伴系统、slab、小缓存池；
-- 页表：TLB 友好布局、大页映射（2MB/1GB）、延迟映射按需创建。
-
 ---
 
 ### 思考题
 1) 设计对比：你的物理分配器与 xv6 有何不同？为何选择？
-- 回答：在页级沿用 free-list 简洁模型，若需连续页则引入伙伴系统；权衡了实现复杂度与性能/碎片之间的关系。
+- 回答：在页级沿用 free-list 简洁模型。
 
 2) 内存安全：如何防止分配器被恶意利用？页表权限的安全考虑？
-- 回答：对输入严格校验（对齐/范围），调试版启用账本与 canary；页表遵循最小权限原则，内核区分 RX 与 RW，禁止 W^X 冲突，用户映射严格 U 位与边界检查。
+- 回答：对输入严格校验（对齐/范围），页表遵循最小权限原则，内核区分 RX 与 RW，禁止 W^X 冲突。
 
 3) 性能分析：瓶颈与优化？
 - 回答：热点在分配/释放与页表 miss；采用伙伴系统减少外部碎片与遍历，使用大页降低 TLB miss，按需/批量分配减少开销。
