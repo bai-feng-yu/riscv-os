@@ -17,17 +17,51 @@ https://github.com/bai-feng-yu/riscv-os/tree/Lab-2
 - 交叉工具链: riscv64-unknown-elf-gcc
 - 模拟器: qemu-system-riscv64（virt 机器）
 
-## 实验原理概述
-- Sv39 将虚拟地址分为 3 级索引（每级 9 位）与 4KB 页内偏移（12 位），硬件按级读取 PTE 完成地址变换。
-- PTE 低位标志位控制有效性与权限，高位 PPN 指向物理页框。
-- 多级页表在内存中以 4KB 为单位存放，每个页表页可容纳 512 个 PTE（8 字节），由 satp 提供根页表 PPN。
-
 ## 实验概述
 
-- 本实验围绕 RISC-V Sv39 分页与页表，在理解硬件规范的基础上，阅读 xv6 相关实现并设计自己的 PMM/PT 框架。
-- 通过逐步回答任务清单中的问题，完成从物理分配器到页表映射再到启用内核虚拟内存的闭环，并给出调试与测试策略。
+### 物理内存管理部分
 
-## 实验概述与问题回答
+- 主要实现了 kalloc.c 中 kinit, kfree, kalloc 三个函数。
+  - 采用链表来存储空闲物理页。
+  - 调用 kalloc 从链表头部取出首个空闲物理页。取出物理页者需要存好物理页的地址，释放时调用 kfree ，输入页地址，kfree 会用头插法把该页插入链表。每次操作链表都会用锁保证互斥访问，物理页取出与放回时都会对具体存放的内容做格式化。 
+  - kinit 则是遍历可分配的物理内存空间( end - 0x88000000 )，逐个调用 kfree。还需要注意规范地址保证内存对齐。
+- 检验结果展示：
+
+![alt text](<屏幕截图 2025-09-22 164512.png>)
+
+### 虚拟内存管理部分
+
+- 先添加头文件部分的内容，
+- 物理地址转虚拟地址：页大小 4KB ⇒ 物理地址低 12 位是页内偏移，不存入 PTE 中（因为一旦映射就是整页对齐）。
+PTE 的低 10 位用于标志位（Valid/Read/Write/Exec/User/...）。
+因此 PPN（物理页号）要放到从 bit 10 开始的位置。
+一个物理地址 PA：
+去掉页内偏移：PA >> 12 ⇒ 得到物理页号 (PPN)。
+需要把它塞进 PTE 的 bit[53:10] ⇒ 再左移 10 比特： (PA >> 12) << 10。
+
+```c
+void testvmmap()
+{
+  pagetable_t kpgtbl;
+
+  kpgtbl = (pagetable_t) kalloc(true);
+  memset(kpgtbl, 0, PGSIZE);
+
+  printf("\n UART0映射前执行查询: walk(kpgtbl, UART0, 0); \n\n");
+  walk(kpgtbl, UART0, 0); // 查询
+
+  //建立
+  // uart registers
+  printf("\n 进行UART0映射: kvmmap(kpgtbl, UART0, UART0, PGSIZE, PTE_R | PTE_W); \n\n");
+  kvmmap(kpgtbl, UART0, UART0, PGSIZE, PTE_R | PTE_W);
+
+  printf("\n UART0映射后执行查询: walk(kpgtbl, UART0, 0); \n\n");
+  walk(kpgtbl, UART0, 0); // 查询
+}
+```
+
+![alt text](image.png)
+## 问题回答
 
 ### 任务1：深入理解 Sv39 页表机制
 
@@ -269,7 +303,7 @@ TODO: 启用前后串口输出/访存验证截图
 
 ---
 
-## 测试与调试策略（分层）
+## 测试与调试策略
 
 ### 1) 物理内存分配器测试
 ```c
@@ -328,7 +362,7 @@ void test_virtual_memory(void) {
 - 地址转换错误：
   - 核对 VPN 提取算法与 PTE 格式；确认物理地址计算是否正确。
 
-### GDB 调试技巧（示例）
+### GDB 调试技巧
 ```bash
 # 查看页表内容（根据调试环境替换命令）
 (gdb) x/64gx $satp_register_content
@@ -345,7 +379,7 @@ void test_virtual_memory(void) {
 
 ---
 
-## 思考题（回答）
+### 思考题
 1) 设计对比：你的物理分配器与 xv6 有何不同？为何选择？
 - 回答：在页级沿用 free-list 简洁模型，若需连续页则引入伙伴系统；权衡了实现复杂度与性能/碎片之间的关系。
 

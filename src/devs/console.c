@@ -39,16 +39,16 @@ consputc(int c)
   }
 }
 
-// struct {
-//   struct spinlock lock;
+struct {
+  struct spinlock lock;
   
-//   // input
-// #define INPUT_BUF_SIZE 128
-//   char buf[INPUT_BUF_SIZE];
-//   uint r;  // Read index
-//   uint w;  // Write index
-//   uint e;  // Edit index
-// } cons;
+  // input
+#define INPUT_BUF_SIZE 128
+  char buf[INPUT_BUF_SIZE];
+  uint r;  // Read index
+  uint w;  // Write index
+  uint e;  // Edit index
+} cons;
 
 // //
 // // user write()s to the console go here.
@@ -176,13 +176,13 @@ consputc(int c)
 //   release(&cons.lock);
 // }
 
-// void
-// consoleinit(void)
-// {
-//   initlock(&cons.lock, "cons");
+void
+consoleinit(void)
+{
+  initlock(&cons.lock, "cons");
 
-//   uartinit();
+  uartinit();
 
-//   // devsw[CONSOLE].read = consoleread;
-//   // devsw[CONSOLE].write = consolewrite;
-// }
+  // devsw[CONSOLE].read = consoleread;
+  // devsw[CONSOLE].write = consolewrite;
+}

@@ -11,7 +11,7 @@
 
 void freerange(void *pa_start, void *pa_end);
 
-extern char end[]; // first address after kernel.
+extern char end[]; // 内核内容后首个可用地址
                    // defined by kernel.ld.
 
 struct run {
