@@ -61,6 +61,8 @@ void testvmmap()
 ```
 
 ![alt text](image.png)
+
+![alt text](<屏幕截图 2025-09-29 142548.png>)
 ## 问题回答
 
 ### 任务1：深入理解 Sv39 页表机制

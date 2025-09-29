@@ -22,30 +22,30 @@ kvmmake(void)
   pagetable_t kpgtbl;
 
   kpgtbl = (pagetable_t) kalloc(true);
-  memset(kpgtbl, 0, PGSIZE);
+  memset(kpgtbl, 0, PGSIZE); //关键清零
 
-  // uart registers
+  // uart寄存器
   kvmmap(kpgtbl, UART0, UART0, PGSIZE, PTE_R | PTE_W);
 
-  // virtio mmio disk interface
+  // virtio mmio磁盘接口
   kvmmap(kpgtbl, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
 
   // PLIC
-  kvmmap(kpgtbl, PLIC, PLIC, 0x4000000, PTE_R | PTE_W);
+  kvmmap(kpgtbl, PLIC, PLIC, 0x400000, PTE_R | PTE_W);
 
-  // map kernel text executable and read-only.
-  kvmmap(kpgtbl, KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
+  // 映射内核代码段为可执行和只读
+  kvmmap(kpgtbl, KERNBASE, KERNBASE, (uint64)etext - KERNBASE, PTE_R | PTE_X);
 
-  // map kernel data and the physical RAM we'll make use of.
-  kvmmap(kpgtbl, (uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
+  // 映射内核数据段和我们将使用的物理RAM
+  kvmmap(kpgtbl, (uint64)etext, (uint64)etext, PHYSTOP - (uint64)etext, PTE_R | PTE_W);
 
-  // map the trampoline for trap entry/exit to
-  // the highest virtual address in the kernel.
+  // 将trampoline页面映射到trap入口/出口，
+  // 位于内核的最高虚拟地址
   kvmmap(kpgtbl, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
 
-  // allocate and map a kernel stack for each process.
+  // // 为每个进程分配并映射一个内核栈
   // proc_mapstacks(kpgtbl);
-  
+
   return kpgtbl;
 }
 
@@ -100,26 +100,19 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
 {
   if(va >= MAXVA)
     panic("walk");
-
-  printf("debug: walk va %p\n\n", va);
-
   for(int level = 2; level > 0; level--) {
     pte_t *pte = &pagetable[PX(level, va)]; //获取索引对应的页表项（虚拟）地址
     if(*pte & PTE_V) { // PTE有效
       //获取下一层页表页的地址，并以页表指针类型返回。
       //循环结束后得到的就是最底层的页表项的地址，内部存储了具体的数据。
       pagetable = (pagetable_t)PTE2PA(*pte); 
-      printf("debug: walk level %d va %p pte %p next level pagetable %p\n", level, va, *pte, pagetable);
     } else {  // PTE无效，先判断是否可以写入
-      printf("debug: walk level %d not VALID\n", level, va, pte);
       if(!alloc || (pagetable = (pde_t*)kalloc(true)) == 0 /* 无空闲物理页 */)
         return 0; // 失败返回0
       memset(pagetable, 0, PGSIZE); // 确定分配，清理一下对应内存
       *pte = PA2PTE(pagetable) | PTE_V; // 设置有效位
-      printf("debug: walk alloc level %d va %p pte %p next level pagetable %p\n\n", level, va, *pte, pagetable);
     }
   }
-  printf("debug: walk leaf va %p pte %p pte address %p \n\n ", va,*&pagetable[PX(0, va)] ,&pagetable[PX(0, va)]);
   return &pagetable[PX(0, va)];  
 }
 
@@ -152,31 +145,53 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
     if(*pte & PTE_V) // 重复映射
       panic("mappages: remap");
     *pte = PA2PTE(pa) | perm | PTE_V; //更新页表项，表示这是叶子页表
-    printf("debug: mappages successful: va %p pa %p pte %p\n", a, pa, *pte);
     if(a == last)
       break;
     a += PGSIZE;
     pa += PGSIZE;
   }
-
   return 0;
 }
 
-void testvmmap()
-{
-  pagetable_t kpgtbl;
+void print_pgtbl(pagetable_t pagetable, int level) {
+  //递归打印页表
+  for(int i = 0; i < 512; i++) { // 512个页表项
+    pte_t pte = pagetable[i];
+    if(pte & PTE_V) {// 打印有效的页表项
 
-  kpgtbl = (pagetable_t) kalloc(true);
-  memset(kpgtbl, 0, PGSIZE);
+      for(int j = 0; j < level; j++)
+        printf("  ");
 
-  printf("\n UART0映射前执行查询: walk(kpgtbl, UART0, 0); \n\n");
-  walk(kpgtbl, UART0, 0); // 查询
+      printf("%d: pte %p pa %p", i, pte, PTE2PA(pte));
 
-  //建立
-  // uart registers
-  printf("\n 进行UART0映射: kvmmap(kpgtbl, UART0, UART0, PGSIZE, PTE_R | PTE_W); \n\n");
-  kvmmap(kpgtbl, UART0, UART0, PGSIZE, PTE_R | PTE_W);
+      if(pte & (PTE_R | PTE_W | PTE_X)) {
+        // 叶子节点
+        printf(" [leaf]\n");
+      } 
+      else {
+        printf("\n");
+        print_pgtbl((pagetable_t)PTE2PA(pte), level + 1);
+      }
+    }
+  }
+}
 
-  printf("\n UART0映射后执行查询: walk(kpgtbl, UART0, 0); \n\n");
-  walk(kpgtbl, UART0, 0); // 查询
+void print_cur_pgtbl(pagetable_t pagetable) {
+  //打印当前层页表
+  printf("page table %p\n", pagetable);
+  for(int i = 0; i < 512; i++) { // 512个页表项
+    pte_t pte = pagetable[i];
+    if(pte & PTE_V) {// 打印有效的页表项
+
+      printf("offset %d, pte %p, pa %p", i, pte, PTE2PA(pte));
+
+      if(pte & (PTE_R | PTE_W | PTE_X)) {
+        // 叶子节点
+        printf(" [leaf]\n");
+      } 
+      else {
+        printf("\n");
+      }
+    }
+  }
 }
