@@ -74,7 +74,7 @@ void timer_update()
 {
     acquire(&sys_timer.lk);
     sys_timer.ticks++;
-    printf("ticks: %d\n", sys_timer.ticks);
+    // printf("ticks: %d\n", sys_timer.ticks);
     release(&sys_timer.lk);
 }
 

@@ -93,29 +93,34 @@ devintr()
   // 检查是否是外部中断
   // scause 的最高位表示是否是中断（1）还是异常（0）
   // 低8位表示中断/异常的具体类型
-  // if((scause & 0x8000000000000000L) &&
-  //    (scause & 0xff) == 9){
-  //   // 这是一个管理员外部中断，通过 PLIC。
-  //   // PLIC (Platform-Level Interrupt Controller) 管理外部设备中断
+  if((scause & 0x8000000000000000L) &&
+     (scause & 0xff) == 9){
+    // 这是一个管理员外部中断，通过 PLIC。
+    // PLIC (Platform-Level Interrupt Controller) 管理外部设备中断
 
-  //   // irq 指示哪个设备产生了中断。
-  //   int irq = plic_claim();  // 获取中断请求号
+    // irq 指示哪个设备产生了中断。
+    int irq = plic_claim();  // 获取中断请求号
 
-  //   // 根据设备类型分发中断处理
-  //   if(irq == UART0_IRQ){
-  //     uartintr();           // 处理串口中断
-  //   } else if(irq){
-  //     printf("unexpected interrupt irq=%d\n", irq);
-  //   }
+    // 根据设备类型分发中断处理
+    switch(irq){
+    case UART0_IRQ:
+      uartintr();           // 处理串口中断
+      break;
+    default:
+      if(irq){
+        printf("unexpected interrupt irq=%d\n", irq);
+      }
+      break;
+    }
 
-  //   // 通知 PLIC 中断处理完成
-  //   // PLIC 允许每个设备一次最多产生一个中断；
-  //   // 告诉 PLIC 现在允许设备再次中断。
-  //   if(irq)
-  //     plic_complete(irq);
+    // 通知 PLIC 中断处理完成
+    // PLIC 允许每个设备一次最多产生一个中断；
+    // 告诉 PLIC 现在允许设备再次中断。
+    if(irq)
+      plic_complete(irq);
 
-  //   return 1;
-  // } else 
+    return 1;
+  } else 
   if(scause == 0x8000000000000001L){
     // 软件中断处理
     // 来自机器模式定时器中断的软件中断，

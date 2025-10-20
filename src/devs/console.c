@@ -20,21 +20,25 @@
 #include "defs.h"
 #include "proc.h"
 
-#define BACKSPACE 0x100
+#define BACKSPACE 0x7f
+// #define BACKSPACE 0x100
 #define C(x)  ((x)-'@')  // Control-x
 
-//
-// send one character to the uart.
-// called by printf(), and to echo input characters,
-// but not from write().
-//
+// 发送一个字符到UART，被(内核)printf调用，以及回显输入字符
+// 但不会被write()调用
 void
 consputc(int c)
 {
+  // 如果当前字符是退格键
   if(c == BACKSPACE){
-    // if the user typed backspace, overwrite with a space.
+    // 如果用户输入的是一个退格键，那么使用一个空格来覆写前一个字符
+    // '\b'转义字符的作用是将光标回退一格，这样下一次写入时会覆盖原本的上一个字符
+    // 下面连续调用三个uartputc_sync函数来将上一个字符清除掉
+
     uartputc_sync('\b'); uartputc_sync(' '); uartputc_sync('\b');
   } else {
+    
+    // 如果不是退格键，那么按照原样字符输出
     uartputc_sync(c);
   }
 }
@@ -186,3 +190,4 @@ consoleinit(void)
   // devsw[CONSOLE].read = consoleread;
   // devsw[CONSOLE].write = consolewrite;
 }
+

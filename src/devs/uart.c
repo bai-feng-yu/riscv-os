@@ -104,25 +104,29 @@ uartinit(void)
 // }
 
 
-// alternate version of uartputc() that doesn't 
-// use interrupts, for use by kernel printf() and
-// to echo characters. it spins waiting for the uart's
-// output register to be empty.
+// 不使用中断的uartputc的替换版本
+// 用于内核printf和回显字符
+// 它会持续等待uart的输出寄存器为空(同步性、阻塞性)
 void
 uartputc_sync(int c)
 {
+  // 关中断，防止串口中断再次进入造成竞争
   push_off();
-
+  
+  // 如果内核已经崩溃则陷入死循环
   if(panicked){
     for(;;)
       ;
   }
 
-  // wait for Transmit Holding Empty to be set in LSR.
+  // 等待LSR中的发送寄存器为空标识被置位
   while((ReadReg(LSR) & LSR_TX_IDLE) == 0)
     ;
+  
+  // 立即通过UART发送字符
   WriteReg(THR, c);
-
+  
+  // 恢复之前的中断状态
   pop_off();
 }
 
@@ -169,25 +173,43 @@ uartgetc(void)
   }
 }
 
-// handle a uart interrupt, raised because input has
-// arrived, or the uart is ready for more output, or
-// both. called from devintr().
-// void
-// uartintr(void)
-// {
-//   // read and process incoming characters.
-//   while(1){
-//     int c = uartgetc();
-//     if(c == -1)
-//       break;
-//     consoleintr(c);
-//   }
+// 处理一个uart中断，当有输入到来或者
+// uart准备好发送更多输出时触发，或二者同时发生
+// 此函数在trap.c中被调用
+// 注意两种情况下会触发此函数：
+// 1.输入通道RX为满(即键盘有数据输入)
+// 2.输出通道TX为空
+void
+uartintr(void)
+{
+  // // 读取和处理到来的字符，对应RX为满的中断
+  // while(1){
+  // 	// 使用uartgetc获取字符
+  // 	// 没有获取到时跳出循环
+  //   int c = uartgetc();
+  //   if(c == -1)
+  //     break;
+    
+  //   // 调用consoleintr函数
+  //   // 这个函数会负责将输入的字符放入console缓冲区
+  //   // 并实时回显用户输入的字符
+  //   // 如果一整行已经到达或者是EOF触发或者缓冲区满
+  //   // 则更新写指针到编辑指针的位置，详情见下
+  //   consoleintr(c);
+  // }
 
-//   // send buffered characters.
-//   acquire(&uart_tx_lock);
-//   uartstart();
-//   release(&uart_tx_lock);
-// }
+  // // 异步发送缓冲区中的字符，对应TX为空的中断
+  // acquire(&uart_tx_lock);
+  // uartstart();
+  // release(&uart_tx_lock);
+  
+  while(1)
+  {
+    int c = uartgetc();
+    if(c == -1) break;
+    consputc(c);
+  }
+}
 
 
 void uart_putc(char c) {

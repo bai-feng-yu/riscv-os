@@ -26,8 +26,8 @@ main()
     // pkrocinit();          // 进程表初始化
     timer_create();           // 陷阱向量(时钟中断）初始化
     trapinithart();      // 安装内核陷阱向量
-    // plicinit();          // 设置中断控制器
-    // plicinithart();      // 向PLIC请求设备中断
+    plicinit();          // 设置中断控制器
+    plicinithart();      // 向PLIC请求设备中断
     // userinit();          // 创建第一个用户进程
     __sync_synchronize();
     started = 1;         // 标记系统启动完成
@@ -40,7 +40,7 @@ main()
     printf("hart %d starting\n", cpuid());
     kvminithart();       // 开启分页机制
     trapinithart();   // 安装内核陷阱向量
-    // plicinithart();   // 向PLIC请求设备中断
+    plicinithart();   // 向PLIC请求设备中断
   }
   intr_on();          // 启用中断
   // // 所有CPU都进入调度器，开始调度用户进程
