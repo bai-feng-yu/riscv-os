@@ -4,10 +4,10 @@
 #include "riscv.h"
 #include "defs.h"
 
-void main();
-void timerinit();
+extern void main();
 
 __attribute__ ((aligned (16))) char stack0[4096 * NCPU];
+
 
 void start() {
   // 设置M模式下的前一特权级为管理者模式(Supervisor)，供mret指令使用
@@ -34,14 +34,17 @@ void start() {
   w_pmpaddr0(0x3fffffffffffffull);  // 设置PMP地址范围
   w_pmpcfg0(0xf);                   // 设置PMP配置(读写执行权限)
 
-//   // 请求时钟中断服务
-//   timerinit();
+  
+  // 请求时钟中断服务
+  timer_init();
 
   // 将当前CPU的hartid保存到tp寄存器中，供cpuid()函数使用
   // 在进入管理者模式中, mhartid寄存器不可用
   int id = r_mhartid();
   w_tp(id);
-  
+
+
   // 切换到管理者模式并跳转到main()函数
   asm volatile("mret");
 }
+

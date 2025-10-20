@@ -21,6 +21,17 @@ void*           kalloc(bool in_kernel);
 void            kfree(uint64 page, bool in_kernel);
 void            kinit(void);
 
+// timer.c
+void   timer_init();       // 时钟初始化
+void   timer_create();     // 时钟创建
+void   timer_update();     // 时钟更新(ticks++)
+uint64 timer_get_ticks();  // 获取时钟的tick
+
+// trap.c
+void            trapinit(void);
+void            trapinithart(void);
+void            usertrapret(void);
+
 // uart.c
 void            uartinit(void);
 void            uartintr(void);
@@ -51,6 +62,14 @@ int             ismapped(pagetable_t, uint64);
 uint64          vmfault(pagetable_t, uint64, int);
 void            print_pgtbl(pagetable_t pagetable, int level) ;
 void            print_cur_pgtbl(pagetable_t pagetable);
+
+
+// plic.c
+void            plicinit(void);
+void            plicinithart(void);
+int             plic_claim(void);
+void            plic_complete(int);
+
 // printf.c
 void            printf(char*, ...);
 void            panic(char*) __attribute__((noreturn));
@@ -79,6 +98,13 @@ int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
 
+// swtch.S
+void            swtch(struct context*, struct context*);
+
+// scheduler.c
+void            scheduler(void) __attribute__((noreturn));
+void            sched(void);
+void            yield(void);
 
 // spinlock.c
 void            acquire(struct spinlock*);
@@ -97,5 +123,7 @@ int             strlen(const char*);
 int             strncmp(const char*, const char*, uint);
 char*           strncpy(char*, const char*, int);
 
+// number of elements in fixed-size array
+#define NELEM(x) (sizeof(x)/sizeof((x)[0]))
 
 #endif

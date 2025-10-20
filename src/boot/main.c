@@ -17,7 +17,6 @@ main()
     // 只有CPU 0(引导处理器)执行系统初始化
     consoleinit();       // 初始化控制台
     printfinit();        // 初始化printf功能
-    printfinit();
     printf("\n");
     printf("hart %d starting\n", cpuid());
     kinit();             // 物理页面分配器初始化
@@ -25,8 +24,8 @@ main()
     kvminithart();       // 开启分页机制
 
     // pkrocinit();          // 进程表初始化
-    // trapinit();          // 陷阱向量初始化
-    // trapinithart();      // 安装内核陷阱向量
+    timer_create();           // 陷阱向量(时钟中断）初始化
+    trapinithart();      // 安装内核陷阱向量
     // plicinit();          // 设置中断控制器
     // plicinithart();      // 向PLIC请求设备中断
     // userinit();          // 创建第一个用户进程
@@ -40,9 +39,11 @@ main()
     __sync_synchronize();
     printf("hart %d starting\n", cpuid());
     kvminithart();       // 开启分页机制
-    // trapinithart();   // 安装内核陷阱向量
+    trapinithart();   // 安装内核陷阱向量
     // plicinithart();   // 向PLIC请求设备中断
   }
+  intr_on();          // 启用中断
   // // 所有CPU都进入调度器，开始调度用户进程
-  // scheduler();        
+  //  scheduler();  
+  for(;;){}      
 }
