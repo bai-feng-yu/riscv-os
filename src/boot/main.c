@@ -4,6 +4,7 @@
 #include "riscv.h"
 #include "defs.h"
 #include "spinlock.h"
+#include "proc-h/proc.h"
 
 volatile static int started = 0;
 struct spinlock start_lock;
@@ -23,16 +24,20 @@ main()
     kvminit();           // 创建内核页表
     kvminithart();       // 开启分页机制
 
-    // pkrocinit();          // 进程表初始化
+    // procinit();          // 进程表初始化
     timer_create();           // 陷阱向量(时钟中断）初始化
     trapinithart();      // 安装内核陷阱向量
     plicinit();          // 设置中断控制器
     plicinithart();      // 向PLIC请求设备中断
-    // userinit();          // 创建第一个用户进程
+
+
+    proc_make_fisrt();   // 创建第一个用户进程 userinit();       
+    printf("hart %d proc fail\n", cpuid());
+        started = 1;         // 标记系统启动完成
     __sync_synchronize();
-    started = 1;         // 标记系统启动完成
+
   } else {
-    // 其他CPU等待CPU 0完成初始化
+    //其他CPU等待CPU 0完成初始化
     while(started == 0)
       ;
     
@@ -42,7 +47,7 @@ main()
     trapinithart();   // 安装内核陷阱向量
     plicinithart();   // 向PLIC请求设备中断
   }
-  intr_on();          // 启用中断
+      intr_on();          // 启用中断
   // // 所有CPU都进入调度器，开始调度用户进程
   //  scheduler();  
   for(;;){}      

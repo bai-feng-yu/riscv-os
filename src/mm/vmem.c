@@ -5,7 +5,7 @@
 #include "riscv.h"
 #include "defs.h"
 #include "spinlock.h"
-#include "proc.h"
+#include "proc-h/proc.h"
 
 ///
 ///  内核页表
@@ -57,6 +57,16 @@ kvmmap(pagetable_t kpgtbl, uint64 va, uint64 pa, uint64 sz, int perm)
 {
   if(mappages(kpgtbl, va, sz, pa, perm) != 0)
     panic("kvmmap");
+}
+
+// Create an empty user page table (just a zeroed root page-table page).
+pagetable_t
+uvmcreate(void)
+{
+  pagetable_t pagetable = (pagetable_t)kalloc(true);
+  if(pagetable)
+    memset(pagetable, 0, PGSIZE);
+  return pagetable;
 }
 
 // Initialize the kernel_pagetable, shared by all CPUs.
@@ -194,4 +204,16 @@ void print_cur_pgtbl(pagetable_t pagetable) {
       }
     }
   }
+}
+
+void uvmfirst(pagetable_t pagetable, uchar *src, uint sz)
+{
+  char *mem;
+
+  if (sz >= PGSIZE)
+    panic("uvmfirst: more than a page");
+  mem = kalloc(1);
+  memset(mem, 0, PGSIZE);
+  mappages(pagetable, 0, PGSIZE, (uint64)mem, PTE_W | PTE_R | PTE_X | PTE_U);
+  memmove(mem, src, sz);
 }

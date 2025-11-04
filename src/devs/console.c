@@ -18,7 +18,7 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "defs.h"
-#include "proc.h"
+#include "proc-h/proc.h"
 
 #define BACKSPACE 0x7f
 // #define BACKSPACE 0x100

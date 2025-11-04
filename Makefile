@@ -8,14 +8,14 @@ NPROC := $(shell nproc)
 MAKEFLAGS += -j$(NPROC)
 
 # ===== 路径定义 =====
-SRC_DIRS := boot devs lib mm proc sync syscall trap
+SRC_DIRS := boot devs lib linker mm proc proc-h sync trap
 BUILD_DIR := build
 
 # ===== 文件收集规则 =====
-# 收集 src 目录下各子目录的源文件
-SRCS := $(shell find $(SRC) -type f \( -name "*.c" -o -name "*.S" \))
+# 仅收集内核相关子目录(见 SRC_DIRS)下的源文件，显式排除 user 目录，避免将用户态程序链接进内核
+SRCS := $(foreach d,$(SRC_DIRS),$(shell find $(SRC)/$(d) -type f \( -name "*.c" -o -name "*.S" \) 2>/dev/null))
 
-$(info === SRCS collected ===)
+$(info === SRCS collected (kernel only) ===)
 $(info $(SRCS))
 
 # 将源文件路径转换为目标文件路径

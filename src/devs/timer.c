@@ -3,7 +3,7 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "spinlock.h"
-#include "proc.h"
+#include "proc-h/proc.h"
 #include "defs.h"
 
 // 计时器

@@ -4,7 +4,8 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "riscv.h"
-#include "proc.h"
+#include "proc-h/proc.h"
+#include "proc-h/cpu.h"
 #include "defs.h"
 
 void

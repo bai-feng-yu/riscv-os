@@ -15,7 +15,7 @@
 
 .section trampsec
 .globl trampoline
-.globl usertrap
+.global trap_user_handler
 trampoline:
 .align 4
 .globl uservec

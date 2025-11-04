@@ -14,6 +14,7 @@ SECTIONS
     *(.text .text.*)
     . = ALIGN(0x1000);
     _trampoline = .;
+    _usertrap = .;
     *(trampsec)
     . = ALIGN(0x1000);
     PROVIDE(etext = .);

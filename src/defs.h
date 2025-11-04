@@ -31,6 +31,9 @@ uint64 timer_get_ticks();  // 获取时钟的tick
 void            trapinit(void);
 void            trapinithart(void);
 void            usertrapret(void);
+void            trap_user_handler();
+void            trap_user_return();
+int             devintr();
 
 // uart.c
 void            uartinit(void);
@@ -46,6 +49,7 @@ void            kvminit(void);
 void            kvminithart(void);
 void            kvmmap(pagetable_t, uint64, uint64, uint64, int);
 int             mappages(pagetable_t, uint64, uint64, uint64, int);
+void            uvmfirst(pagetable_t, uchar *src, uint sz);
 pagetable_t     uvmcreate(void);
 uint64          uvmalloc(pagetable_t, uint64, uint64, int);
 uint64          uvmdealloc(pagetable_t, uint64, uint64);
