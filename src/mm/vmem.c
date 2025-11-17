@@ -44,7 +44,7 @@ kvmmake(void)
   kvmmap(kpgtbl, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
 
   // // 为每个进程分配并映射一个内核栈
-  // proc_mapstacks(kpgtbl);
+  proc_mapstacks(kpgtbl);//TODO
 
   return kpgtbl;
 }

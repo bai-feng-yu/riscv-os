@@ -20,7 +20,7 @@ struct run {
 
 struct {
   struct spinlock lock;
-  struct run *freelist;
+  struct run *freelist; 
 } kmem;
 
 void
@@ -74,6 +74,8 @@ kalloc(bool in_kernel)
   r = kmem.freelist;  //从头部获取空闲页
   if(r)
     kmem.freelist = r->next;
+  else 
+    panic("kalloc: out of memory");
   release(&kmem.lock);
 
   if(r)

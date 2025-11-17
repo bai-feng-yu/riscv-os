@@ -2,7 +2,7 @@
 #define __PROC_H__
 
 #include "types.h"
-
+#include "spinlock.h"
 
 // 页表类型定义
 typedef uint64* pgtbl_t;
@@ -68,21 +68,34 @@ typedef struct trapframe {
     /* 280 */ uint64 t6;
 } trapframe_t;
 
+enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+
 // 进程定义
 typedef struct proc {
     int pid;                 // 标识符
 
+    struct spinlock lock;
+
+    // p->lock must be held when using these:
+    enum procstate state;        // Process state
     pgtbl_t pgtbl;           // 用户态页表
     uint64 heap_top;         // 用户堆顶(以字节为单位)
     uint64 ustack_pages;     // 用户栈占用的页面数量
     trapframe_t* tf;         // 用户态内核态切换时的运行环境暂存空间
 
+    uint64 sz;               // Size of process memory (bytes)
     uint64 kstack;           // 内核栈的虚拟地址
     context_t ctx;           // 内核态进程上下文
 } proc_t;
 
 
-void     proc_make_fisrt();                      // 创建第一个进程并切换到它执行
-pgtbl_t  proc_pgtbl_init(uint64 trapframe);      // 进程页表的初始化和基本映射
-
+// ==== 来自 proc.c 的函数声明 ====
+// 获取一个初始化好的用户页表，并完成 trampoline 与 trapframe 映射
+pgtbl_t  proc_pgtbl_init(uint64 trapframe);
+// 创建第一个用户进程并进行第一次上下文切换（进入用户返回路径）
+void     userinit(void);
+void procinit(void);
+void freeproc(struct proc *p);
+void proc_mapstacks(pgtbl_t kpgtbl);
+extern struct proc proc[NPROC];
 #endif

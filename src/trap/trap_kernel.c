@@ -4,6 +4,7 @@
 #include "riscv.h"
 #include "spinlock.h"
 #include "proc-h/proc.h"
+#include "proc-h/cpu.h"
 #include "defs.h"
 
 // 外部汇编函数声明
@@ -102,8 +103,8 @@ kerneltrap()
   // 内核中的进程调度
   // 如果这是定时器中断，则让出 CPU。
   // 允许在内核执行过程中进行进程切换
-  // if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
-  //   yield();
+  if(which_dev == 2 && myproc() != 0 /*&& myproc()->state == RUNNING*/)
+    yield();
 
   // 恢复处理器状态
   // yield() 可能导致一些陷阱发生，

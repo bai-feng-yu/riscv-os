@@ -3,6 +3,8 @@
         "spinlock.h": "c",
         "defs.h": "c",
         "initcode.h": "c",
-        "proc.h": "c"
+        "proc.h": "c",
+        "typeinfo": "c",
+        "syscall.h": "c"
     }
 }

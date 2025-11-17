@@ -4,6 +4,7 @@
 #include "riscv.h"
 #include "spinlock.h"
 #include "proc-h/proc.h"
+#include "proc-h/cpu.h"
 #include "defs.h"
 
 // in trampoline.S
@@ -49,7 +50,7 @@ void trap_user_handler()
   // 保存用户程序计数器。
   // sepc 寄存器包含发生陷阱时的 PC 值
   p->tf->epc = sepc;
-  
+  //printf("usertrap: scause %p pid=%d\n", scause, p->pid);
   // 判断陷阱类型并分别处理
   if(scause == 8){
     // 系统调用处理
@@ -69,10 +70,12 @@ void trap_user_handler()
     // 中断会改变 sepc、scause 和 sstatus，
     // 所以只有在我们完成这些寄存器的操作后才启用中断。
     intr_on();
+    printf("get a syscall from proc %d\n", myproc()->pid);
 
     // 调用系统调用处理函数
     // syscall();
   } else if((which_dev = devintr()) != 0){
+    printf("usertrap: devintr which_dev=%d\n", which_dev);
     // 设备中断处理
     // devintr() 返回非零值表示这是一个设备中断
     // 正常
@@ -102,9 +105,7 @@ void trap_user_handler()
 // 内核态返回用户态
 void trap_user_return()
 {
-  if(intr_get())
-    panic("trap_user_return: interrupts enabled (SIE=1) on entry");
-        
+  //printf("trap_user_return\n");
   struct proc *p = myproc();
 
   // 关闭中断，防止在准备过程中被打断

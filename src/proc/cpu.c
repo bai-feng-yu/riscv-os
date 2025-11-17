@@ -1,13 +1,13 @@
 #include "proc-h/cpu.h"
 #include "riscv.h"
 #include "defs.h"
+#include "proc-h/cpu.h"
 
-// Global CPU array and PID allocator state
-static cpu_t cpus[NCPU];
+// 实际定义全局变量
+struct proc proc[NPROC];
+struct cpu cpus[NCPU];
 int nextpid = 1;
 struct spinlock pid_lock;
-
-
 
 // Must be called with interrupts disabled,
 // to prevent race with process being moved
