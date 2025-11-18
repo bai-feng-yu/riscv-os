@@ -59,15 +59,7 @@ kvmmap(pagetable_t kpgtbl, uint64 va, uint64 pa, uint64 sz, int perm)
     panic("kvmmap");
 }
 
-// Create an empty user page table (just a zeroed root page-table page).
-pagetable_t
-uvmcreate(void)
-{
-  pagetable_t pagetable = (pagetable_t)kalloc(true);
-  if(pagetable)
-    memset(pagetable, 0, PGSIZE);
-  return pagetable;
-}
+
 
 // Initialize the kernel_pagetable, shared by all CPUs.
 void
@@ -163,6 +155,38 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   return 0;
 }
 
+
+// 检查PTE是否为用户可访问的有效页面
+static inline int
+is_user_accessible_page(pte_t pte)
+{
+  return (pte & PTE_V) && (pte & PTE_U);
+}
+
+// 查找虚拟地址，返回物理地址，
+// 如果没有映射则返回0
+// 只能用于查找用户页面
+uint64
+walkaddr(pagetable_t pagetable, uint64 va)
+{
+  pte_t *pte;
+  uint64 pa;
+
+  if (va >= MAXVA)
+    return 0;
+
+  pte = walk(pagetable, va, 0);
+  if (pte == 0)
+    return 0;
+
+  if (!is_user_accessible_page(*pte))
+    return 0;
+
+  pa = PTE2PA(*pte);
+  return pa;
+}
+
+
 void print_pgtbl(pagetable_t pagetable, int level) {
   //递归打印页表
   for(int i = 0; i < 512; i++) { // 512个页表项
@@ -204,16 +228,4 @@ void print_cur_pgtbl(pagetable_t pagetable) {
       }
     }
   }
-}
-
-void uvmfirst(pagetable_t pagetable, uchar *src, uint sz)
-{
-  char *mem;
-
-  if (sz >= PGSIZE)
-    panic("uvmfirst: more than a page");
-  mem = kalloc(1);
-  memset(mem, 0, PGSIZE);
-  mappages(pagetable, 0, PGSIZE, (uint64)mem, PTE_W | PTE_R | PTE_X | PTE_U);
-  memmove(mem, src, sz);
 }

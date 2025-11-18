@@ -2,7 +2,7 @@
 #define __SYSCALL_H__
 
 #include "syscall_arch.h"
-#include "syscall_num.h"
+#include "sysnum.h"
 
 #ifndef __scc
 #define __scc(X) ((long)(X))

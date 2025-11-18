@@ -1,5 +1,5 @@
 K=kernel
-# U=user
+U=user
 SRC=src
 
 # ===== 并行编译配置 =====
@@ -8,7 +8,7 @@ NPROC := $(shell nproc)
 MAKEFLAGS += -j$(NPROC)
 
 # ===== 路径定义 =====
-SRC_DIRS := boot devs lib linker mm proc proc-h sync trap
+SRC_DIRS := boot devs lib linker mm proc proc-h sync trap syscall
 BUILD_DIR := build
 
 # ===== 文件收集规则 =====
@@ -88,16 +88,17 @@ $(BUILD_DIR)/%.o: $(SRC)/%.S
 	$(CC) $(CFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
 
 # 特殊处理 initcode.S，使其依赖于 user/initcode
-# $(BUILD_DIR)/boot/initcode.o: $(SRC)/boot/initcode.S $U/initcode
-# 	@mkdir -p $(dir $@)
-# 	$(CC) $(CFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
+$(BUILD_DIR)/boot/initcode.o: $(SRC)/boot/initcode.S $U/initcode.bin
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(INCLUDES) -MMD -MP -c $< -o $@
+	rm -f $U/initcode.bin
 
 $K/kernel: dirs $(ENTRY_OBJ) $(OBJS_NO_ENTRY) $(SRC)/linker/kernel.ld 
 	@mkdir -p $K
 	$(LD) $(LDFLAGS) -T $(SRC)/linker/kernel.ld -o $K/kernel $(ENTRY_OBJ) $(OBJS_NO_ENTRY)
 	$(OBJDUMP) -S $K/kernel > $K/kernel.asm
 	$(OBJDUMP) -t $K/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $K/kernel.sym
-
+	
 # # ===== User 程序编译规则 =====
 # # 生成系统调用汇编文件
 # $U/usys.S: $U/usys.pl
@@ -107,23 +108,30 @@ $K/kernel: dirs $(ENTRY_OBJ) $(OBJS_NO_ENTRY) $(SRC)/linker/kernel.ld
 # $U/usys.o: $U/usys.S
 # 	$(CC) $(CFLAGS) -c -o $U/usys.o $U/usys.S
 
+# 创建入口点对象文件（确保在开头）
+$U/start.o: $U/start.S
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 # # 编译 initcode.c 为 ELF 文件
-# $U/initcode.o: $U/initcode.c $U/user.h
-# 	$(CC) $(CFLAGS) -march=rv64g -nostdinc -I. -I$(SRC) -c $U/initcode.c -o $U/initcode.o
+$U/initcode.o: $U/initcode.c # $U/user.h
+	$(CC) $(CFLAGS) -march=rv64g -nostdinc -I. -I$(SRC) -c $U/initcode.c -o $U/initcode.o
 
 # # 编译 printf.c 为 ELF 文件
 # $U/printf.o: $U/printf.c $U/user.h
 # 	$(CC) $(CFLAGS) -march=rv64g -I. -I$(SRC) -c $U/printf.c -o $U/printf.o
 
 # # 链接生成 initcode ELF 文件
-# $U/initcode: $U/initcode.o $U/usys.o $U/printf.o $U/user-riscv.ld
-# 	$(LD) $(LDFLAGS) -T $U/user-riscv.ld -o $U/initcode $U/initcode.o $U/usys.o $U/printf.o
-# 	$(OBJDUMP) -S $U/initcode > $U/initcode.asm
-# 	$(OBJDUMP) -t $U/initcode | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $U/initcode.sym
+$U/initcode: $U/start.o $U/initcode.o $U/user.ld #$U/usys.o $U/printf.o $U/user-riscv.ld
+# 	$(LD) $(LDFLAGS) -T $U/user.ld -o $U/initcode $U/initcode.o    $U/usys.o $U/printf.o
+	$(LD) $(LDFLAGS) -T $U/user.ld -o $U/initcode $U/start.o $U/initcode.o
+	$(OBJDUMP) -S $U/initcode > $U/initcode.asm
+	$(OBJDUMP) -t $U/initcode | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $U/initcode.sym
+	rm -f $U/initcode.d $U/initcode.o $U/initcode.out $U/start.o $U/start.d $U/initcode.sym 
 
 # # 从 ELF 文件生成二进制文件
-# $U/initcode.bin: $U/initcode
-# 	$(OBJCOPY) -S -O binary $< $@
+$U/initcode.bin: $U/initcode
+	$(OBJCOPY) -S -O binary $< $@
+	rm -f $U/initcode.d $U/initcode
 
 # tags: $(OBJS) _init
 # 	etags *.S *.c
@@ -148,10 +156,11 @@ clean:
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
 	$K/kernel fs.img \
 	mkfs/mkfs .gdbinit
-# 	rm -f $U/initcode $U/initcode.o $U/initcode.asm $U/initcode.sym $U/initcode.d $U/initcode.bin
+	rm -f $U/initcode $U/initcode.o $U/initcode.asm $U/initcode.sym $U/initcode.d $U/initcode.bin $U/start.o $U/start.d
 	rm -f $U/usys.S $U/usys.o $U/usys.d
 	rm -f $U/printf.o $U/printf.d
 	rm -rf $(BUILD_DIR)
+
 
 # try to generate a unique GDB port
 GDBPORT = $(shell expr `id -u` % 5000 + 25000)

@@ -24,7 +24,7 @@ scheduler(void)
   for(;;){
     // 通过确保设备能够产生中断来避免死锁
     intr_on();
-    intr_off();  // 禁用中断
+
     // 遍历进程表，寻找可运行的进程
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);

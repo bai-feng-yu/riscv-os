@@ -48,14 +48,6 @@ void            kvminit(void);
 void            kvminithart(void);
 void            kvmmap(pagetable_t, uint64, uint64, uint64, int);
 int             mappages(pagetable_t, uint64, uint64, uint64, int);
-void            uvmfirst(pagetable_t, uchar *src, uint sz);
-pagetable_t     uvmcreate(void);
-uint64          uvmalloc(pagetable_t, uint64, uint64, int);
-uint64          uvmdealloc(pagetable_t, uint64, uint64);
-int             uvmcopy(pagetable_t, pagetable_t, uint64);
-void            uvmfree(pagetable_t, uint64);
-void            uvmunmap(pagetable_t, uint64, uint64, int);
-void            uvmclear(pagetable_t, uint64);
 pte_t *         walk(pagetable_t, uint64, int);
 uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
@@ -66,6 +58,18 @@ uint64          vmfault(pagetable_t, uint64, int);
 void            print_pgtbl(pagetable_t pagetable, int level) ;
 void            print_cur_pgtbl(pagetable_t pagetable);
 
+/*------------------------ in uvm.c -----------------------*/
+void            uvmfirst(pagetable_t, uchar *src, uint sz);
+pagetable_t     uvmcreate(void);
+uint64          uvmalloc(pagetable_t, uint64, uint64, int);
+uint64          uvmdealloc(pagetable_t, uint64, uint64);
+int             uvmcopy(pagetable_t, pagetable_t, uint64);
+void            uvmfree(pagetable_t, uint64);
+void            uvmunmap(pagetable_t, uint64, uint64, int);
+void            uvmclear(pagetable_t, uint64);
+int             uvm_copyin(pagetable_t pgtbl, uint64 dst, uint64 src, uint32 len);
+int             uvm_copyout(pagetable_t pgtbl, uint64 dst, uint64 src, uint32 len);
+int             uvm_copyin_str(pagetable_t pgtbl, uint64 dst, uint64 src, uint32 maxlen);
 
 // plic.c
 void            plicinit(void);
@@ -105,6 +109,6 @@ int             strncmp(const char*, const char*, uint);
 char*           strncpy(char*, const char*, int);
 
 // number of elements in fixed-size array
-#define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+    #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
 
 #endif

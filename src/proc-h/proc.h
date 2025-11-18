@@ -97,5 +97,6 @@ void     userinit(void);
 void procinit(void);
 void freeproc(struct proc *p);
 void proc_mapstacks(pgtbl_t kpgtbl);
+int growproc(int n);
 extern struct proc proc[NPROC];
 #endif

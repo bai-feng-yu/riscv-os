@@ -6,6 +6,7 @@
 #include "proc-h/proc.h"
 #include "proc-h/cpu.h"
 #include "defs.h"
+#include "syscall-h/syscall.h"
 
 // in trampoline.S
 extern char trampoline[];       // 内核和用户切换的代码
@@ -70,12 +71,13 @@ void trap_user_handler()
     // 中断会改变 sepc、scause 和 sstatus，
     // 所以只有在我们完成这些寄存器的操作后才启用中断。
     intr_on();
-    printf("get a syscall from proc %d\n", myproc()->pid);
+    // printf("get a syscall from proc %d\n", myproc()->pid);
 
     // 调用系统调用处理函数
-    // syscall();
+    syscall();
+
   } else if((which_dev = devintr()) != 0){
-    printf("usertrap: devintr which_dev=%d\n", which_dev);
+    // printf("usertrap: devintr which_dev=%d\n", which_dev);
     // 设备中断处理
     // devintr() 返回非零值表示这是一个设备中断
     // 正常
@@ -83,6 +85,8 @@ void trap_user_handler()
     // 未知陷阱类型 - 这通常表示程序错误
     printf("usertrap(): unexpected scause %p pid=%d\n", scause, p->pid);
     printf("            sepc=%p stval=%p\n", sepc, stval);
+    print_cur_pgtbl(p->pgtbl);
+    panic("usertrap");
     // setkilled(p);  // 标记进程需要被杀死
   }
 

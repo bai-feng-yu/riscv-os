@@ -9,31 +9,34 @@
 //#include "mem/mmap.h"
 #include "syscall-h/sysfunc.h"
 #include "syscall-h/syscall.h"
+#include "syscall-h/sysnum.h"
 
 // 堆伸缩
 // uint64 new_heap_top 新的堆顶 (如果是0代表查询, 返回旧的堆顶)
 // 成功返回新的堆顶 失败返回-1
 uint64 sys_brk()
 {
+    uint64 new_addr;
+    uint64 old_addr = myproc()->sz;  // 保存原始堆顶
 
-}
+    arg_uint64(0, &new_addr);  // 正确读取64位地址
+    
+    if(new_addr == old_addr) {
+        return old_addr;  // 无变化，返回当前堆顶
+    }
+    
+    int diff = (int)(new_addr - old_addr);
+    
+    // 检查是否溢出
+    if((uint64)diff != (new_addr - old_addr)) {
+        return -1;  // 差值太大，int无法表示
+    }
 
-// 内存映射
-// uint64 start 起始地址 (如果为0则由内核自主选择一个合适的起点, 通常是顺序扫描找到一个够大的空闲空间)
-// uint32 len   范围(字节, 检查是否是page-aligned)
-// 成功返回映射空间的起始地址, 失败返回-1
-uint64 sys_mmap()
-{
-
-}
-
-// 取消内存映射
-// uint64 start 起始地址
-// uint32 len   范围(字节, 检查是否是page-aligned)
-// 成功返回0 失败返回-1
-uint64 sys_munmap()
-{
-
+    if(growproc(diff) < 0) {
+        return -1;  // 扩展失败
+    }
+    
+    return new_addr;  // 返回扩展前的地址
 }
 
 // copyin 测试 (int 数组)
@@ -85,3 +88,15 @@ uint64 sys_copyinstr()
 
     return 0;
 }
+
+uint64 sys_debug(void)
+{
+    char buf[128];
+
+    // arg_str：从用户态参数中读到字符串内容复制到 buf
+    arg_str(0, buf, sizeof(buf));
+
+    printf("[debug] %s \n", buf);
+    return 0;
+}
+

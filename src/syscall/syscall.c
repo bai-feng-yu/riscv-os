@@ -1,25 +1,40 @@
-#include "lib/print.h"
-#include "proc/cpu.h"
-#include "mem/mmap.h"
-#include "mem/vmem.h"
-#include "syscall/syscall.h"
-#include "syscall/sysnum.h"
-#include "syscall/sysfunc.h"
+#include "types.h"
+#include "param.h"
+#include "memlayout.h"
+#include "riscv.h"
+#include "spinlock.h"
+#include "proc-h/proc.h"
+#include "defs.h"
+#include "proc-h/cpu.h"
+#include "syscall-h/sysfunc.h"
+#include "syscall-h/syscall.h"
+#include "syscall-h/sysnum.h"
 
 // 系统调用跳转
 static uint64 (*syscalls[])(void) = {
     [SYS_brk]           sys_brk,
-    [SYS_mmap]          sys_mmap,
-    [SYS_munmap]        sys_munmap,
     [SYS_copyin]        sys_copyin,
     [SYS_copyout]       sys_copyout,
     [SYS_copyinstr]     sys_copyinstr,
+    [SYS_debug]         sys_debug,
 };
 
 // 系统调用
-void syscall()
+void syscall(void)
 {
+    int num;
+    struct proc *p = myproc();
 
+    num = p->tf->a7;
+    if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
+        // Use num to lookup the system call function for num, call it,
+        // and store its return value in p->trapframe->a0
+        p->tf->a0 = syscalls[num]();
+    } else {
+        printf("pid %d: unknown sys call %d\n",
+                p->pid, num);
+        p->tf->a0 = -1;
+    }
 }
 
 /*

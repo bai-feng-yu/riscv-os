@@ -7,7 +7,9 @@
 #include "memlayout.h"
 #include "proc-h/proc.h"
 #include "proc-h/cpu.h"
-#include "proc-h/initcode.h"
+
+extern char initcode_start[];
+extern char initcode_end[];
 
 // in trampoline.S
 extern char trampoline[];
@@ -204,7 +206,7 @@ userinit(void)
   
   // allocate one user page and copy initcode's instructions
   // and data into it.
-  uvmfirst(p->pgtbl, initcode, sizeof(initcode));
+  uvmfirst(p->pgtbl, (uchar*)initcode_start, (uint64)(initcode_end - initcode_start));
   p->sz = PGSIZE;
 
   // prepare for the very first "return" from kernel to user.
@@ -217,6 +219,26 @@ userinit(void)
   p->state = RUNNABLE;
 
   release(&p->lock);
+}
+
+// Grow or shrink user memory by n bytes.
+// Return 0 on success, -1 on failure.
+int
+growproc(int n)
+{
+  uint64 sz;
+  struct proc *p = myproc();
+
+  sz = p->sz;
+  if(n > 0){
+    if((sz = uvmalloc(p->pgtbl, sz, sz + n, PTE_W)) == 0) {
+      return -1;
+    }
+  } else if(n < 0){
+    sz = uvmdealloc(p->pgtbl, sz, sz + n);
+  }
+  p->sz = sz;
+  return 0;
 }
 
 // void proc_make_fisrt()
