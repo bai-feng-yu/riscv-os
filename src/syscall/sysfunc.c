@@ -7,6 +7,7 @@
 #include "defs.h"
 #include "proc-h/cpu.h"
 //#include "mem/mmap.h"
+#include "devs/timer.h"
 #include "syscall-h/sysfunc.h"
 #include "syscall-h/syscall.h"
 #include "syscall-h/sysnum.h"
@@ -21,7 +22,7 @@ uint64 sys_brk()
 
     arg_uint64(0, &new_addr);  // 正确读取64位地址
     
-    if(new_addr == old_addr) {
+    if(new_addr == old_addr || new_addr == 0) {
         return old_addr;  // 无变化，返回当前堆顶
     }
     
@@ -39,55 +40,68 @@ uint64 sys_brk()
     return new_addr;  // 返回扩展前的地址
 }
 
-// copyin 测试 (int 数组)
+// 打印字符
 // uint64 addr
-// uint32 len
-// 返回 0
-uint64 sys_copyin()
+uint64 sys_print()
 {
-    proc_t* p = myproc();
-    uint64 addr;
-    uint32 len;
+    char buf[128];
 
-    arg_uint64(0, &addr);
-    arg_uint32(1, &len);
+    // arg_str：从用户态参数中读到字符串内容复制到 buf
+    arg_str(0, buf, sizeof(buf));
 
-    int tmp;
-    for(int i = 0; i < len; i++) {
-        uvm_copyin(p->pgtbl, (uint64)&tmp, addr + i * sizeof(int), sizeof(int));
-        printf("get a number from user: %d\n", tmp);
+    printf("%s", buf);
+    return 0;
+}
+
+// 进程复制
+uint64 sys_fork()
+{
+    return fork();
+}
+
+// 进程等待
+// uint64 addr  子进程退出时的exit_state需要放到这里 
+uint64 sys_wait()
+{
+    uint64 p;
+    arg_uint64(0, &p);
+    return wait(p);
+}
+
+// 进程退出
+// int exit_state
+uint64 sys_exit()
+{
+    uint64 n;
+    arg_uint64(0, &n);
+    exit(n);
+    return 0;  // not reached
+}
+
+extern timer_t sys_timer;
+
+// 进程睡眠一段时间
+// uint32 second 睡眠时间
+// 成功返回0, 失败返回-1
+uint64 sys_sleep()
+{
+    uint64 n;
+    uint ticks0;
+
+    arg_uint64(0, &n);
+    acquire(& sys_timer.lk);
+    ticks0 = sys_timer.ticks;
+    while(sys_timer.ticks - ticks0 < n){
+        if(killed(myproc())){
+        release(&sys_timer.lk);
+        return -1;
+        }
+        sleep(&sys_timer.ticks, &sys_timer.lk);
     }
-
+    release(& sys_timer.lk);
     return 0;
 }
 
-// copyout 测试 (int 数组)
-// uint64 addr
-// 返回数组元素数量
-uint64 sys_copyout()
-{
-    int L[5] = {1, 2, 3, 4, 5};
-    proc_t* p = myproc();
-    uint64 addr;
-
-    arg_uint64(0, &addr);
-    uvm_copyout(p->pgtbl, addr, (uint64)L, sizeof(int) * 5);
-
-    return 5;
-}
-
-// copyinstr测试
-// uint64 addr
-// 成功返回0
-uint64 sys_copyinstr()
-{
-    char s[64];
-
-    arg_str(0, s, 64);
-    printf("get str from user: %s\n", s);
-
-    return 0;
-}
 
 uint64 sys_debug(void)
 {

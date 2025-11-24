@@ -256,3 +256,21 @@ int uvm_copyin_str(pgtbl_t pgtbl, uint64 dst, uint64 srcva, uint32 maxlen)
     return -1;
   }
 }
+
+// 计算给定大小需要的页面数量
+static inline uint64
+calculate_pages_needed(uint64 size)
+{
+  return PGROUNDUP(size) / PGSIZE;
+}
+
+// 释放用户内存页面，然后释放页表页面
+void uvmfree(pagetable_t pagetable, uint64 sz)
+{
+  if (sz > 0)
+  {
+    uint64 npages = calculate_pages_needed(sz);
+    uvmunmap(pagetable, 0, npages, 1);
+  }
+  freewalk(pagetable);
+}

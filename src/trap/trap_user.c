@@ -58,8 +58,8 @@ void trap_user_handler()
     // scause == 8 表示这是一个来自用户模式的 ecall 指令
 
     // 检查进程是否被标记为需要杀死
-    // if(killed(p))
-    //   exit(-1);
+    if(killed(p))
+      exit(-1);
 
     // 重要：调整返回地址
     // sepc 指向 ecall 指令，
@@ -85,14 +85,13 @@ void trap_user_handler()
     // 未知陷阱类型 - 这通常表示程序错误
     printf("usertrap(): unexpected scause %p pid=%d\n", scause, p->pid);
     printf("            sepc=%p stval=%p\n", sepc, stval);
-    print_cur_pgtbl(p->pgtbl);
     panic("usertrap");
-    // setkilled(p);  // 标记进程需要被杀死
+    setkilled(p);  // 标记进程需要被杀死
   }
 
   // 检查进程是否在陷阱处理过程中被杀死
-//   if(killed(p))
-//     exit(-1);
+  if(killed(p))
+    exit(-1);
 
   // 进程调度检查
   // 如果这是定时器中断，则让出 CPU。

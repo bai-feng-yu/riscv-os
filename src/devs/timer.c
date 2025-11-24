@@ -5,12 +5,7 @@
 #include "spinlock.h"
 #include "proc-h/proc.h"
 #include "defs.h"
-
-// 计时器
-typedef struct timer {
-    uint64 ticks;
-    struct spinlock lk;
-} timer_t;
+#include "devs/timer.h"
 
 /*-------------------- 工作在M-mode --------------------*/
 
@@ -59,7 +54,7 @@ timer_init()
 /*--------------------- 工作在S-mode --------------------*/
 
 // 系统时钟
-static timer_t sys_timer;
+timer_t sys_timer;
 
 // 时钟创建(初始化系统时钟)
 // 陷阱初始化函数

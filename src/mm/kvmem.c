@@ -43,8 +43,8 @@ kvmmake(void)
   // 位于内核的最高虚拟地址
   kvmmap(kpgtbl, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
 
-  // // 为每个进程分配并映射一个内核栈
-  proc_mapstacks(kpgtbl);//TODO
+  // 为每个进程分配并映射一个内核栈
+  proc_mapstacks(kpgtbl);
 
   return kpgtbl;
 }
@@ -186,6 +186,64 @@ walkaddr(pagetable_t pagetable, uint64 va)
   return pa;
 }
 
+// 检查PTE是否有效
+static inline int
+is_pte_valid(pte_t pte)
+{
+  return (pte & PTE_V) != 0;
+}
+
+// 检查PTE是否为叶子节点(包含实际的物理页映射)
+static inline int
+is_pte_leaf(pte_t pte)
+{
+  return (pte & (PTE_R | PTE_W | PTE_X)) != 0;
+}
+
+// 检查PTE是否指向下一级页表（而非叶子页面）
+static inline int
+is_page_table_pointer(pte_t pte)
+{
+  return is_pte_valid(pte) && !is_pte_leaf(pte);
+}
+
+
+// 从PTE获取下一级页表的物理地址
+static inline uint64
+get_next_page_table_pa(pte_t pte)
+{
+  return PTE2PA(pte);
+}
+
+// 页表中PTE的数量（2^9 = 512）
+#define PAGE_TABLE_ENTRIES 512
+
+// 递归释放页表页面
+// 所有叶子映射必须已经被移除
+void freewalk(pagetable_t pagetable)
+{
+  // 遍历页表中的所有PTE
+  for (int i = 0; i < PAGE_TABLE_ENTRIES; i++)
+  {
+    pte_t pte = pagetable[i];
+
+    if (is_page_table_pointer(pte))
+    {
+      // 这个PTE指向一个下级页表，递归释放
+      uint64 child_pa = get_next_page_table_pa(pte);
+      freewalk((pagetable_t)child_pa);
+      pagetable[i] = 0;
+    }
+    else if (is_pte_valid(pte))
+    {
+      // 发现叶子页面，应该已经被清理
+      panic("freewalk: found unexpected leaf page");
+    }
+  }
+
+  // 释放当前页表页面
+  kfree((uint64)pagetable, true);
+}
 
 void print_pgtbl(pagetable_t pagetable, int level) {
   //递归打印页表

@@ -12,10 +12,14 @@
 
 // 系统调用跳转
 static uint64 (*syscalls[])(void) = {
+    [SYS_print]         sys_print,
     [SYS_brk]           sys_brk,
-    [SYS_copyin]        sys_copyin,
-    [SYS_copyout]       sys_copyout,
-    [SYS_copyinstr]     sys_copyinstr,
+    // [SYS_mmap]          sys_mmap,
+    // [SYS_munmap]        sys_munmap,
+    [SYS_fork]          sys_fork,
+    [SYS_wait]          sys_wait,
+    [SYS_exit]          sys_exit,
+    [SYS_sleep]         sys_sleep,
     [SYS_debug]         sys_debug,
 };
 
@@ -26,7 +30,7 @@ void syscall(void)
     struct proc *p = myproc();
 
     num = p->tf->a7;
-    if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
+    if(num >= 0 && num < NELEM(syscalls) && syscalls[num]) {
         // Use num to lookup the system call function for num, call it,
         // and store its return value in p->trapframe->a0
         p->tf->a0 = syscalls[num]();

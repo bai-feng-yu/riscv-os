@@ -23,8 +23,8 @@ int main()
       //用于返回调试信息
       char buf[128];
 
-      //测试点1，设置堆顶为4096
-      long long heap_top = syscall(SYS_brk, 4096);
+      //测试点1，查询当前堆顶
+      long long heap_top = syscall(SYS_brk, 0);
       itoa(heap_top, buf);
       syscall(SYS_debug, buf);
 
@@ -44,9 +44,60 @@ int main()
 期望返回正确的修改后的堆顶
 
 #### 结果展示
-<img src="image.png" style="width:40%; height: auto;" />
+<img src="image-2.png" style="width:40%; height: auto;" />
 
 可以看到返回的堆顶都符合我们测试代码的预期。
+
+### 任务2：实现系统调用 fork, wait, exit, sleep, print
+
+#### 测试代码
+
+```c
+int main()
+{
+    syscall(SYS_print, "\nuser begin\n");
+    
+    // 测试HEAP区域
+    long long top = syscall(SYS_brk, 0);
+    str2 = (char*)top;
+    syscall(SYS_brk, top + PGSIZE);
+
+    str2[0] = 'H';
+    str2[1] = 'E';
+    str2[2] = 'A';
+    str2[3] = 'P';
+    str2[4] = '\n';
+    str2[5] = '\0';
+
+    int pid = syscall(SYS_fork); 
+
+    if(pid == 0) { // 子进程
+        for(int i = 0; i < 100000000; i++);
+        syscall(SYS_print, "child: hello\n"); //期望输出
+        syscall(SYS_print, str2);   //期望输出
+
+        syscall(SYS_exit, 1);
+        syscall(SYS_print, "child: never back\n"); //不期望输出
+    } else {       // 父进程
+        int exit_state;        
+        syscall(SYS_wait, &exit_state);
+        if(exit_state == 1)
+            syscall(SYS_print, "parent: hello\n"); //期望输出
+        else
+            syscall(SYS_print, "parent: error\n"); //不期望输出
+    }
+
+    while(1);
+    return 0;
+}
+```
+
+#### 结果展示
+
+<img src="image.png" style="width:40%; height: auto;" />
+
+可以看到输出都符合我们测试代码的预期。
+
 
 
 

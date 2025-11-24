@@ -25,6 +25,12 @@ extern struct proc proc[NPROC];
 // 第一个进程
 static struct proc* proczero;
 
+// helps ensure that wakeups of wait()ing
+// parents are not lost. helps obey the
+// memory model when using p->parent.
+// must be acquired before any p->lock.
+struct spinlock wait_lock;
+
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
 // guard page.
@@ -47,7 +53,7 @@ void procinit(void)
     struct proc *p;
 
     initlock(&pid_lock, "nextpid");
-
+    initlock(&wait_lock, "wait_lock");
     for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->state = UNUSED;
@@ -70,7 +76,7 @@ forkret(void)
     // regular process (e.g., because it calls sleep), and thus cannot
     // be run from main().
     first = 0;
-    // fsinit(ROOTDEV); //初始化文件系统
+    // fsinit(ROOTDEV); //初始化文件系统//TODO
   }
 
   trap_user_return();
@@ -98,7 +104,7 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
-
+  p->sz=4096;
   // Allocate a trapframe page.
   if((p->tf = (struct trapframe *)kalloc(1)) == 0){
     freeproc(p);
@@ -130,9 +136,9 @@ found:
 void
 proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
-  // uvmunmap(pagetable, TRAMPOLINE, 1, 0); //TODO
-  // uvmunmap(pagetable, TRAPFRAME, 1, 0);
-  // uvmfree(pagetable, sz);
+  uvmunmap(pagetable, TRAMPOLINE, 1, 0); 
+  uvmunmap(pagetable, TRAPFRAME, 1, 0);
+  uvmfree(pagetable, sz);
 }
 
 // free a proc structure and the data hanging from it,
@@ -145,12 +151,19 @@ void freeproc(struct proc *p)
   p->tf = 0;
   if(p->pgtbl)
     proc_freepagetable(p->pgtbl, p->sz);
-  if(p->kstack)
-    kfree((uint64)p->kstack,1); 
-  p->kstack = 0;
-  p->sz = 0;
+
   p->pgtbl = 0;
+  p->parent = 0;
+  p->chan = 0;
+  p->killed = 0;
+  p->exit_state = 0;
+  p->sleep_space = 0;
+  p->ustack_pages = 0;
+  p->sz = 0;
   p->pid = 0;
+  
+  memset(&p->ctx, 0, sizeof(p->ctx));
+
   p->state = UNUSED;
 }
 
@@ -212,6 +225,7 @@ userinit(void)
   // prepare for the very first "return" from kernel to user.
   p->tf->epc = 0;      // user program counter
   p->tf->sp = PGSIZE;  // user stack pointer
+  
 
   // safestrcpy(p->name, "initcode", sizeof(p->name));
   //p->cwd = namei("/");
@@ -241,80 +255,303 @@ growproc(int n)
   return 0;
 }
 
-// void proc_make_fisrt()
-// {
+// 复制物理页面内容
+static inline int
+copy_physical_page(uint64 src_pa, char **dest_mem)
+{
+  *dest_mem = kalloc(1);
+  if (*dest_mem == 0)
+    return -1; // 内存分配失败
+
+  memmove(*dest_mem, (char *)src_pa, PGSIZE);
+  return 0;
+}
+
+// 清理部分复制的页面（错误处理）
+static inline void
+cleanup_partial_copy(pagetable_t new_table, uint64 copied_size)
+{
+  uint64 npages = copied_size / PGSIZE;
+  uvmunmap(new_table, 0, npages, 1);
+}
+
+
+// 检查PTE是否有效
+static inline int
+is_pte_valid(pte_t pte)
+{
+  return (pte & PTE_V) != 0;
+}
+
+// 给定父进程的页表，复制其内存到子进程的页表
+// 复制页表和物理内存
+// 成功返回0，失败返回-1
+// 失败时释放任何已分配的页面
+int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
+{
+  pte_t *pte;
+  uint64 pa, current_va;
+  uint flags;
+  char *mem;
+
+  for (current_va = 0; current_va < sz; current_va += PGSIZE)
+  {
+    pte = walk(old, current_va, 0);
+    if (pte == 0)
+      panic("uvmcopy: pte should exist");
+
+    if (!is_pte_valid(*pte))
+      panic("uvmcopy: page not present");
+
+    pa = PTE2PA(*pte);
+    flags = PTE_FLAGS(*pte);
+
+    if (copy_physical_page(pa, &mem) != 0)
+      goto err;
+
+    if (mappages(new, current_va, PGSIZE, (uint64)mem, flags) != 0)
+    {
+      kfree((uint64)mem,1);
+      goto err;
+    }
+  }
+  return 0;
+
+err:
+  cleanup_partial_copy(new, current_va);
+  return -1;
+}
+
+// Create a new process, copying the parent.
+// Sets up child kernel stack to return as if from fork() system call.
+int
+fork(void)
+{
+  // int i; //TODO
+  int pid;
+  struct proc *np;
+  struct proc *p = myproc();
+
+  // Allocate process.
+  if((np = allocproc()) == 0){
+    return -1;
+  }
+
+  // Copy user memory from parent to child.
+  if(uvmcopy(p->pgtbl, np->pgtbl, p->sz) < 0){
+    freeproc(np);
+    release(&np->lock);
+    return -1;
+  }
+  np->sz = p->sz;
+
+  // copy saved user registers.
+  *(np->tf) = *(p->tf);
+
+  // Cause fork to return 0 in the child.
+  np->tf->a0 = 0;
+
+  // increment reference counts on open file descriptors.
+  // for(i = 0; i < NOFILE; i++)  //TODO
+  //   if(p->ofile[i])
+  //     np->ofile[i] = filedup(p->ofile[i]);
+  // np->cwd = idup(p->cwd);
+
+  //safestrcpy(np->name, p->name, sizeof(p->name));
+
+  pid = np->pid;
+
+  release(&np->lock);
+
+  acquire(&wait_lock);
+  np->parent = p;
+  release(&wait_lock);
+
+  acquire(&np->lock);
+  np->state = RUNNABLE;
+  release(&np->lock);
+
+  return pid;
+}
+
+
+
+
+// Atomically release lock and sleep on chan.
+// Reacquires lock when awakened.
+void
+sleep(void *chan, struct spinlock *lk)
+{
+  struct proc *p = myproc();
   
-//     struct proc *p = &proczero;
-//     memset(p, 0, sizeof(*p));
+  // Must acquire p->lock in order to
+  // change p->state and then call sched.
+  // Once we hold p->lock, we can be
+  // guaranteed that we won't miss any wakeup
+  // (wakeup locks p->lock),
+  // so it's okay to release lk.
 
-//     p->pid = allocpid();
+  acquire(&p->lock);  //DOC: sleeplock1
+  release(lk);
 
-//     // Allocate a trapframe page. （注意：确认你的 kalloc 接口是 kalloc(1) 还是 kalloc()）
-//     if((p->tf = (struct trapframe *)kalloc(1)) == 0){
-//         panic("proc_make_first: kalloc trapframe failed");
-//         return ;
-//     }
-//     // 清零整页（trapframe 占一页）
-//     memset(p->tf, 0, PGSIZE);
+  // Go to sleep.
+  p->chan = chan;
+  p->state = SLEEPING;
 
-//     // prepare for the very first "return" from kernel to user.
-//     p->tf->epc = 0;      // user program counter
+  sched();
 
-//     // pagetable 初始化：传入 trapframe 的物理地址
-//     p->pgtbl = proc_pgtbl_init((uint64)(p->tf));
-//     if (p->pgtbl == 0) {
-//         panic("proc_make_first: proc_pgtbl_init failed");
-//     }
+  // Tidy up.
+  p->chan = 0;
 
-//     // ---- 用户栈映射 ----
-//     uint64 ustack_va = 2 * PGSIZE;          // virtual address of stack page base
-//     char *ustack_pa = kalloc(1);
-//     if (ustack_pa == 0) {
-//         panic("proc_make_first: kalloc ustack failed");
-//     }
-//     // zero the newly allocated physical page
-//     memset(ustack_pa, 0, PGSIZE);
+  // Reacquire original lock.
+  release(&p->lock);
+  acquire(lk);
+}
 
-//     // 注意：mappages 期望的 pa 是物理地址，因此传 V2P(ustack_pa)
-//     if (mappages(p->pgtbl, ustack_va, PGSIZE, (uint64)(ustack_pa), PTE_R | PTE_W | PTE_U) < 0) {
-//         panic("proc_make_first: mappages ustack failed");
-//     }
-//     p->ustack_pages = 1;
+// Wake up all processes sleeping on chan.
+// Must be called without any p->lock.
+void
+wakeup(void *chan)
+{
+  struct proc *p;
 
-//     // kernel stack
-//     // 暂时只有一个进程，分配固定大小的进程栈
-//     // p->kstack = (uint64)proc0stack;
-//     p->kstack =ustack_va + PGSIZE;
-//     // user stack pointer：栈顶在 ustack_va + PGSIZE
-//     p->tf->sp = ustack_va + PGSIZE; // = 3 * PGSIZE
+  for(p = proc; p < &proc[NPROC]; p++) {
+    if(p != myproc()){
+      acquire(&p->lock);
+      if(p->state == SLEEPING && p->chan == chan) {
+        p->state = RUNNABLE;
+      }
+      release(&p->lock);
+    }
+  }
+}
 
-//     // data + code 映射：用 initcode_len 作为长度（比 sizeof(initcode) 更保险）
-//     uvmfirst(p->pgtbl, initcode, initcode_len);
 
-//     if(initcode_len > PGSIZE){
-//         panic("proc_make_first: initcode too big\n");
-//     }
 
-//     // 设置 heap_top / p->sz，供 sbrk/growproc 使用
-//     p->heap_top = 2 * PGSIZE;
+void
+setkilled(struct proc *p)
+{
+  acquire(&p->lock);
+  p->killed = 1;
+  release(&p->lock);
+}
 
-//     // 初始化上下文
-//     memset(&p->ctx, 0, sizeof(p->ctx));
+int
+killed(struct proc *p)
+{
+  int k;
+  
+  acquire(&p->lock);
+  k = p->killed;
+  release(&p->lock);
+  return k;
+}
+
+// Wait for a child process to exit and return its pid.
+// Return -1 if this process has no children.
+int
+wait(uint64 addr)
+{
+  struct proc *pp;
+  int havekids, pid;
+  struct proc *p = myproc();
+
+  acquire(&wait_lock);
+
+  for(;;){
+    // Scan through table looking for exited children.
+    havekids = 0;
+    for(pp = proc; pp < &proc[NPROC]; pp++){
+      if(pp->parent == p){
+        // make sure the child isn't still in exit() or swtch().
+        acquire(&pp->lock);
+
+        havekids = 1;
+        if(pp->state == ZOMBIE){
+          // Found one.
+          pid = pp->pid;
+          if(addr != 0 && uvm_copyout(p->pgtbl, addr, (uint64)&pp->exit_state,
+                                  sizeof(pp->exit_state)) < 0) {
+            release(&pp->lock);
+            release(&wait_lock);
+            return -1;
+          }
+          freeproc(pp);
+          release(&pp->lock);
+          release(&wait_lock);
+          return pid;
+        }
+        release(&pp->lock);
+      }
+    }
+
+    // No point waiting if we don't have any children.
+    if(!havekids || killed(p)){
+      release(&wait_lock);
+      return -1;
+    }
     
-    
+    // Wait for a child to exit.
+    sleep(p, &wait_lock);  //DOC: wait-sleep
+  }
+}
 
-//     // 上下文返回点设置为 trap_user_return
-//     p->ctx.ra = (uint64)trap_user_return;
-//     p->ctx.sp = p->kstack +2*PGSIZE; // 内核栈顶
+// Pass p's abandoned children to init.
+// Caller must hold wait_lock.
+void
+reparent(struct proc *p)
+{
+  struct proc *pp;
 
-//     // 把该进程关联到当前 CPU 并切换上下文
-//     struct cpu* c = mycpu();
-//     c->proc = p;
+  for(pp = proc; pp < &proc[NPROC]; pp++){
+    if(pp->parent == p){
+      pp->parent = proczero;
+      wakeup(proczero);
+    }
+  }
+}
 
-//     printf("[proc_make_first] first process created: pid=%d\n", p->pid);
+// Exit the current process.  Does not return.
+// An exited process remains in the zombie state
+// until its parent calls wait().
+void
+exit(int status)
+{
+  struct proc *p = myproc();
 
-//     swtch(&c->context, &p->ctx);
-    
+  if(p == proczero)
+    panic("init exiting");
 
-//     // 当该进程回到内核（exit/yield）时，调度器/其他代码应清理 c->proc
-// }
+  // Close all open files. //TODO
+  // for(int fd = 0; fd < NOFILE; fd++){
+  //   if(p->ofile[fd]){
+  //     struct file *f = p->ofile[fd];
+  //     fileclose(f);
+  //     p->ofile[fd] = 0;
+  //   }
+  // }
+
+  // begin_op();
+  // iput(p->cwd);
+  // end_op();
+  // p->cwd = 0;
+
+  acquire(&wait_lock);
+
+  // Give any children to init.
+  reparent(p);
+
+  // Parent might be sleeping in wait().
+  wakeup(p->parent);
+  
+  acquire(&p->lock);
+
+  p->exit_state = status;
+  p->state = ZOMBIE;
+
+  release(&wait_lock);
+
+  // Jump into the scheduler, never to return.
+  sched();
+  panic("zombie exit");
+}
