@@ -14,12 +14,12 @@
 static uint64 (*syscalls[])(void) = {
     [SYS_print]         sys_print,
     [SYS_brk]           sys_brk,
-    // [SYS_mmap]          sys_mmap,
-    // [SYS_munmap]        sys_munmap,
     [SYS_fork]          sys_fork,
     [SYS_wait]          sys_wait,
     [SYS_exit]          sys_exit,
     [SYS_sleep]         sys_sleep,
+    [SYS_kill]          sys_kill,
+    [SYS_getpid]        sys_getpid,
     [SYS_debug]         sys_debug,
 };
 

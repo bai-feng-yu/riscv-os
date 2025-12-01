@@ -36,24 +36,38 @@ void itoa(int x, char *buf) {
 
 int main()
 {
-      //用于返回调试信息
-      char buf[128];
+    syscall(SYS_print, "\nuser begin\n");
+    
+    // 测试HEAP区域
+    long long top = syscall(SYS_brk, 0);
+    str2 = (char*)top;
+    syscall(SYS_brk, top + PGSIZE);
 
-      //测试点1，查询当前堆顶
-      long long heap_top = syscall(SYS_brk, 0);
-      itoa(heap_top, buf);
-      syscall(SYS_debug, buf);
+    str2[0] = 'H';
+    str2[1] = 'E';
+    str2[2] = 'A';
+    str2[3] = 'P';
+    str2[4] = '\n';
+    str2[5] = '\0';
 
-      //测试点2，设置堆顶为 4096+4096*10 = 45056
-      heap_top = syscall(SYS_brk, heap_top + 4096 * 10);
-      itoa(heap_top, buf);
-      syscall(SYS_debug, buf);
+    int pid = syscall(SYS_fork);
 
-      //测试点3，设置堆顶为 4096+4096*10-4096*5 = 24576
-      heap_top = syscall(SYS_brk, heap_top - 4096 * 5);
-      itoa(heap_top, buf);
-      syscall(SYS_debug, buf);
-      while(1);
-      return 0;
+    if(pid == 0) { // 子进程
+        for(int i = 0; i < 100000000; i++);
+        syscall(SYS_print, "child: hello\n");
+        syscall(SYS_print, str2);
 
+        syscall(SYS_kill, syscall(SYS_getpid));
+        syscall(SYS_print, "child: never back\n");
+    } else {       // 父进程
+        int exit_state;        
+        syscall(SYS_wait, &exit_state);
+        if(exit_state == 1)
+            syscall(SYS_print, "parent: hello\n");
+        else
+            syscall(SYS_print, "parent: error\n");
+    }
+
+    while(1);
+    return 0;
 }

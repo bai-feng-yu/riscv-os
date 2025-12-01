@@ -40,6 +40,20 @@ uint64 sys_brk()
     return new_addr;  // 返回扩展前的地址
 }
 
+uint64
+sys_kill(void)
+{
+  uint64 pid;
+
+  arg_uint64(0, &pid);
+  return kill(pid);
+}
+
+uint64
+sys_getpid(void)
+{
+  return myproc()->pid;
+}
 // 打印字符
 // uint64 addr
 uint64 sys_print()

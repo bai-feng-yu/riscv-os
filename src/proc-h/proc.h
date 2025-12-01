@@ -110,6 +110,7 @@ int         killed(struct proc *p);
 void        exit(int status);
 void        sleep(void *chan, struct spinlock *lk);
 void        wakeup(void *chan);
+int         kill(int pid);
 
 extern struct proc proc[NPROC];
 
