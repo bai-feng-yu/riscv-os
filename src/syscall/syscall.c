@@ -21,6 +21,21 @@ static uint64 (*syscalls[])(void) = {
     [SYS_kill]          sys_kill,
     [SYS_getpid]        sys_getpid,
     [SYS_debug]         sys_debug,
+    [SYS_open]         sys_open,
+    [SYS_close]        sys_close,
+    [SYS_read]         sys_read,
+    [SYS_write]        sys_write,
+    [SYS_lseek]        sys_lseek,
+    [SYS_dup]          sys_dup,
+    [SYS_fstat]        sys_fstat,
+    // [SYS_getdir]       sys_getdir,
+    [SYS_mkdir]        sys_mkdir,
+    [SYS_chdir]        sys_chdir,
+    [SYS_link]         sys_link,
+    [SYS_unlink]       sys_unlink,
+    //测试：
+    [SYS_alloc_block]  sys_alloc_block,
+    [SYS_free_block]   sys_free_block,
 };
 
 // 系统调用
@@ -91,4 +106,24 @@ void arg_str(int n, char* buf, int maxlen)
     arg_uint64(n, &addr);
 
     uvm_copyin_str(p->pgtbl, (uint64)buf, addr, maxlen);
+}
+
+int
+fetchstr(uint64 addr, char *buf, int max)
+{
+  struct proc *p = myproc();
+  if(uvm_copyin_str(p->pgtbl, (uint64) buf, addr, max) < 0)
+    return -1;
+  return strlen(buf);
+}
+
+// Fetch the nth word-sized system call argument as a null-terminated string.
+// Copies into buf, at most max.
+// Returns string length if OK (including nul), -1 if error.
+int
+argstr(int n, char *buf, int max)
+{
+  uint64 addr;
+  argaddr(n, &addr);
+  return fetchstr(addr, buf, max);
 }

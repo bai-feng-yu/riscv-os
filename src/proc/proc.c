@@ -75,8 +75,10 @@ forkret(void)
     // File system initialization must be run in the context of a
     // regular process (e.g., because it calls sleep), and thus cannot
     // be run from main().
+    // printf("proc %d: first user process init\n", myproc()->pid);
     first = 0;
-    // fsinit(ROOTDEV); //初始化文件系统//TODO
+    fsinit(ROOTDEV); //初始化文件系统
+    // printf("proc %d: first user process init done\n", myproc()->pid);
   }
 
   trap_user_return();
@@ -228,7 +230,7 @@ userinit(void)
   
 
   // safestrcpy(p->name, "initcode", sizeof(p->name));
-  //p->cwd = namei("/");
+  p->cwd = namei("/");
 
   p->state = RUNNABLE;
 
@@ -327,7 +329,7 @@ err:
 int
 fork(void)
 {
-  // int i; //TODO
+  int i; 
   int pid;
   struct proc *np;
   struct proc *p = myproc();
@@ -352,10 +354,10 @@ fork(void)
   np->tf->a0 = 0;
 
   // increment reference counts on open file descriptors.
-  // for(i = 0; i < NOFILE; i++)  //TODO
-  //   if(p->ofile[i])
-  //     np->ofile[i] = filedup(p->ofile[i]);
-  // np->cwd = idup(p->cwd);
+  for(i = 0; i < NOFILE; i++) 
+    if(p->ofile[i])
+      np->ofile[i] = filedup(p->ofile[i]);
+  np->cwd = idup(p->cwd);
 
   //safestrcpy(np->name, p->name, sizeof(p->name));
 
@@ -545,19 +547,19 @@ exit(int status)
   if(p == proczero)
     panic("init exiting");
 
-  // Close all open files. //TODO
-  // for(int fd = 0; fd < NOFILE; fd++){
-  //   if(p->ofile[fd]){
-  //     struct file *f = p->ofile[fd];
-  //     fileclose(f);
-  //     p->ofile[fd] = 0;
-  //   }
-  // }
+  // Close all open files. 
+  for(int fd = 0; fd < NOFILE; fd++){
+    if(p->ofile[fd]){
+      struct file *f = p->ofile[fd];
+      fileclose(f);
+      p->ofile[fd] = 0;
+    }
+  }
 
-  // begin_op();
-  // iput(p->cwd);
-  // end_op();
-  // p->cwd = 0;
+  begin_op();
+  iput(p->cwd);
+  end_op();
+  p->cwd = 0;
 
   acquire(&wait_lock);
 
@@ -577,4 +579,34 @@ exit(int status)
   // Jump into the scheduler, never to return.
   sched();
   panic("zombie exit");
+}
+
+// Copy to either a user address, or kernel address,
+// depending on usr_dst.
+// Returns 0 on success, -1 on error.
+int
+either_copyout(int user_dst, uint64 dst, void *src, uint64 len)
+{
+  struct proc *p = myproc();
+  if(user_dst){
+    return copyout(p->pgtbl, dst, src, len);
+  } else {
+    memmove((char *)dst, src, len);
+    return 0;
+  }
+}
+
+// Copy from either a user address, or kernel address,
+// depending on usr_src.
+// Returns 0 on success, -1 on error.
+int
+either_copyin(void *dst, int user_src, uint64 src, uint64 len)
+{
+  struct proc *p = myproc();
+  if(user_src){
+    return copyin(p->pgtbl, dst, src, len);
+  } else {
+    memmove(dst, (char*)src, len);
+    return 0;
+  }
 }

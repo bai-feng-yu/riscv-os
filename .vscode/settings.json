@@ -6,6 +6,14 @@
         "proc.h": "c",
         "typeinfo": "c",
         "syscall.h": "c",
-        "sysfunc.h": "c"
+        "sysfunc.h": "c",
+        "types.h": "c",
+        "param.h": "c",
+        "fs.h": "c",
+        "sleeplock.h": "c",
+        "bitmap.h": "c",
+        "vio.h": "c",
+        "inode.h": "c",
+        "cstdlib": "c"
     }
 }

@@ -25,6 +25,7 @@
 #define UART0_IRQ 10
 
 // virtio mmio interface
+#define VIRTIO_BASE 0x10001000
 #define VIRTIO0 0x10001000
 #define VIRTIO0_IRQ 1
 
