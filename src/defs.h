@@ -52,9 +52,12 @@ uint32 file_lseek(struct file * file, uint32 offset, int flags);
 // fs.c
 void fsinit(int);
 int dirlink(struct inode *, char *, uint);
+int dir_unlink(struct inode *dp, char *name); // Added
 struct inode *dirlookup(struct inode *, char *, uint *);
+void dir_print(struct inode *dp); // Added
 struct inode *ialloc(uint, short);
 struct inode *idup(struct inode *);
+struct inode *iget(uint dev, uint inum); // Added
 void iinit();
 void ilock(struct inode *);
 void iput(struct inode *);
@@ -71,6 +74,7 @@ void itrunc(struct inode *);
 // 测试：
 uint balloc(uint dev);
 void  bfree(int dev, uint bn);
+void assert(int condition, char *msg); // Added
 
 // log.c
 void initlog(int, struct superblock *);
