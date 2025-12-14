@@ -91,6 +91,8 @@ void inode_unlock_free(struct inode *ip) {
     iput(ip);
 }
 
+static struct inode *iget(uint dev, uint inum);
+
 /// @brief 初始化文件系统
 void fsinit(int dev)
 {
@@ -102,49 +104,111 @@ void fsinit(int dev)
   // 初始化日志系统
   initlog(dev, &sb);
 
-  // in fs.c fs_init()
-    // 在函数外声明两个个大小为 2*BLOCK_SIZE 的数组 str 和 tmp
-    // blockcmp 函数负责比较两个大小为 2*BLOCK_SIZE 的空间是否完全一样
+  begin_op();
+   // 创建inode
+    struct inode* ip = iget(dev, ROOTINO);
+    struct inode* ip_1 = inode_create(T_DIR, 0, 0);
+    struct inode* ip_2 = inode_create(T_DIR, 0, 0);
+    struct inode* ip_3 = inode_create(T_FILE, 0, 0);
 
-    uint32 ret = 0;
+    // 上锁
+    ilock(ip);
+    ilock(ip_1);
+    ilock(ip_2);
+    ilock(ip_3);
 
-    for(int i = 0; i < BSIZE * 2; i++)
-        str[i] = i & 0xff;
-
-    begin_op();
-    // 创建新的inode
-    struct inode* nip = inode_create(T_FILE, 0, 0);
-    printf("nip: %p\n", nip);
-    inode_lock(nip);
+    // 创建目录
+    dirlink(ip, "user", ip_1->inum);
+    dirlink(ip_1, "work", ip_2->inum);
+    dirlink(ip_2, "hello.txt", ip_3->inum);
     
-    // 第一次查看
-    inode_print(nip);
+    // 填写文件
+    writei(ip_3, 0, (uint64)"hello world", 0, 11);
 
-    // 第一次写入
-    ret = writei(nip, 0, (uint64)str, 0, BSIZE / 2);
-    assert(ret == BSIZE / 2, "inode_write_data: fail");
-
-    // 第二次写入
-    ret = writei(nip, 0, (uint64)(str + BSIZE / 2), BSIZE / 2, BSIZE + BSIZE / 2);
-    assert(ret == BSIZE +  BSIZE / 2, "inode_write_data: fail");
-
-    // 一次读取
-    ret = readi(nip, 0, (uint64)tmp, 0, BSIZE * 2);
-    assert(ret == BSIZE * 2, "inode_read_data: fail");
-
-    // 第二次查看
-    inode_print(nip);
+    // 解锁
+    iunlock(ip_3);
+    iunlock(ip_2);
+    iunlock(ip_1);
+    iunlock(ip);
     
-    inode_unlock_free(nip);
+    // 释放引用
+    iput(ip_3);
+    iput(ip_2);
+    iput(ip_1);
+    iput(ip);
+    
     end_op();
 
-    // 测试
-    if(blockcmp(tmp, str) == true)
-        printf("fsinit test success\n");
-    else
-        printf("fsinit test fail\n");
+    // 路径查找
+    char* path = "/user/work/hello.txt";
+    char name[DIRSIZ];
+    struct inode* tmp_1 = nameiparent(path, name);
+    struct inode* tmp_2 = namei(path);
 
+    if(tmp_1 == 0) panic("tmp1 = NULL");
+    if(tmp_2 == 0) panic("tmp2 = NULL");
+    printf("\nname = %s\n", name);
+
+    // 输出 tmp_1 的信息
+    ilock(tmp_1);
+    inode_print(tmp_1);
+    iunlockput(tmp_1);
+
+    // 输出 tmp_2 的信息
+    ilock(tmp_2);
+    inode_print(tmp_2);
+    char str[12];
+    str[11] = 0;
+    readi(tmp_2, 0, (uint64)str, 0, 11);
+    printf("read: %s\n", str);
+    iunlockput(tmp_2);
+
+    printf("dir test over\n");
     while (1); 
+    
+  // // in fs.c fs_init()
+  //   // 在函数外声明两个个大小为 2*BLOCK_SIZE 的数组 str 和 tmp
+  //   // blockcmp 函数负责比较两个大小为 2*BLOCK_SIZE 的空间是否完全一样
+
+  //   uint32 ret = 0;
+
+  //   for(int i = 0; i < BSIZE * 2; i++)
+  //       str[i] = i & 0xff;
+
+  //   begin_op();
+  //   // 创建新的inode
+  //   struct inode* nip = inode_create(T_FILE, 0, 0);
+  //   printf("nip: %p\n", nip);
+  //   inode_lock(nip);
+    
+  //   // 第一次查看
+  //   inode_print(nip);
+
+  //   // 第一次写入
+  //   ret = writei(nip, 0, (uint64)str, 0, BSIZE / 2);
+  //   assert(ret == BSIZE / 2, "inode_write_data: fail");
+
+  //   // 第二次写入
+  //   ret = writei(nip, 0, (uint64)(str + BSIZE / 2), BSIZE / 2, BSIZE + BSIZE / 2);
+  //   assert(ret == BSIZE +  BSIZE / 2, "inode_write_data: fail");
+
+  //   // 一次读取
+  //   ret = readi(nip, 0, (uint64)tmp, 0, BSIZE * 2);
+  //   assert(ret == BSIZE * 2, "inode_read_data: fail");
+
+  //   // 第二次查看
+  //   inode_print(nip);
+    
+  //   inode_unlock_free(nip);
+  //   end_op();
+
+  //   // 测试
+  //   if(blockcmp(tmp, str) == true)
+  //       printf("fsinit test success\n");
+  //   else
+  //       printf("fsinit test fail\n");
+
+  //   while (1); 
 
 }
 
