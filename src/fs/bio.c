@@ -156,3 +156,35 @@ bunpin(struct buf *b) {
 }
 
 
+// 输出buf_cache的情况
+void buf_print()
+{
+    acquire(&bcache.lock);
+    printf("\nBuffer Cache (Index Order):\n");
+    printf("IDX  DEV  BLOCK  REF  VALID  DATA\n");
+    for(int i = 0; i < NBUF; i++){
+        struct buf *b = &bcache.buf[i];
+        if(b->refcnt > 0 || b->valid || b->blockno != 0) {
+            if(i < 10) printf(" ");
+            printf("%d   ", i);
+            
+            printf("%d    ", b->dev);
+            
+            printf("%d     ", b->blockno);
+            if(b->blockno < 10) printf("   ");
+            else if(b->blockno < 100) printf("  ");
+            else if(b->blockno < 1000) printf(" ");
+
+            printf("%d    ", b->refcnt);
+            printf("%d      ", b->valid);
+            
+            for(int j = 0; j < 8; j++){
+                int val = (unsigned char)b->data[j];
+                if(val < 16) printf("0");
+                printf("%x ", val);
+            }
+            printf("\n");
+        }
+    }
+    release(&bcache.lock);
+}

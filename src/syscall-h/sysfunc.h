@@ -32,4 +32,10 @@ uint64 sys_unlink();
 // 用于测试的块管理系统调用
 uint64 sys_alloc_block();
 uint64 sys_free_block();
+
+uint64 sys_show_buf();
+uint64 sys_write_block();
+uint64 sys_read_block();
+uint64 sys_release_block();
+
 #endif

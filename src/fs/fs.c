@@ -28,6 +28,12 @@
 // only one device
 struct superblock sb;
 
+char *inode_types[] = { "unused", "dir", "file", "dev" };
+
+void assert(int condition, char *msg) {
+    if (!condition) panic(msg);
+}
+
 /// @brief 读取超级块
 static void
 readsb(int dev, struct superblock *sb)
@@ -41,6 +47,50 @@ readsb(int dev, struct superblock *sb)
   brelse(bp);
 }
 
+char str [BSIZE * 2];
+char tmp [BSIZE * 2];
+
+
+// 输出inode信息
+// for dubug
+void inode_print(struct inode* ip)
+{
+    assert(holdingsleep(&ip->lock), "inode_print: lk");
+
+    printf("\ninode information:\n");
+    printf("num = %d, ref = %d, valid = %d\n", ip->inum, ip->ref, ip->valid);
+    printf("type = %s, major = %d, minor = %d, nlink = %d\n", inode_types[ip->type], ip->major, ip->minor, ip->nlink);
+    printf("size = %d, addrs =", ip->size);
+    for(int i = 0; i < NDIRECT+1; i++)
+        printf(" %d", ip->addrs[i]);
+    printf("\n");
+}
+
+bool blockcmp(void *a, void *b) {
+    return memcmp(a, b, BSIZE * 2) == 0;
+}
+
+struct inode* inode_create(short type, short major, short minor) {
+    struct inode *ip = ialloc(ROOTDEV, type);
+    if(ip == 0) return 0;
+    ilock(ip);
+    ip->major = major;
+    ip->minor = minor;
+    ip->nlink = 1;
+    iupdate(ip);
+    iunlock(ip);
+    return ip;
+}
+
+void inode_lock(struct inode *ip) {
+    ilock(ip);
+}
+
+void inode_unlock_free(struct inode *ip) {
+    iunlock(ip);
+    iput(ip);
+}
+
 /// @brief 初始化文件系统
 void fsinit(int dev)
 {
@@ -51,6 +101,51 @@ void fsinit(int dev)
     panic("invalid file system");
   // 初始化日志系统
   initlog(dev, &sb);
+
+  // in fs.c fs_init()
+    // 在函数外声明两个个大小为 2*BLOCK_SIZE 的数组 str 和 tmp
+    // blockcmp 函数负责比较两个大小为 2*BLOCK_SIZE 的空间是否完全一样
+
+    uint32 ret = 0;
+
+    for(int i = 0; i < BSIZE * 2; i++)
+        str[i] = i & 0xff;
+
+    begin_op();
+    // 创建新的inode
+    struct inode* nip = inode_create(T_FILE, 0, 0);
+    printf("nip: %p\n", nip);
+    inode_lock(nip);
+    
+    // 第一次查看
+    inode_print(nip);
+
+    // 第一次写入
+    ret = writei(nip, 0, (uint64)str, 0, BSIZE / 2);
+    assert(ret == BSIZE / 2, "inode_write_data: fail");
+
+    // 第二次写入
+    ret = writei(nip, 0, (uint64)(str + BSIZE / 2), BSIZE / 2, BSIZE + BSIZE / 2);
+    assert(ret == BSIZE +  BSIZE / 2, "inode_write_data: fail");
+
+    // 一次读取
+    ret = readi(nip, 0, (uint64)tmp, 0, BSIZE * 2);
+    assert(ret == BSIZE * 2, "inode_read_data: fail");
+
+    // 第二次查看
+    inode_print(nip);
+    
+    inode_unlock_free(nip);
+    end_op();
+
+    // 测试
+    if(blockcmp(tmp, str) == true)
+        printf("fsinit test success\n");
+    else
+        printf("fsinit test fail\n");
+
+    while (1); 
+
 }
 
 /** Block层操作

@@ -34,8 +34,10 @@ static uint64 (*syscalls[])(void) = {
     [SYS_link]         sys_link,
     [SYS_unlink]       sys_unlink,
     //测试：
-    [SYS_alloc_block]  sys_alloc_block,
-    [SYS_free_block]   sys_free_block,
+    [SYS_read_block]   sys_read_block,
+    [SYS_release_block] sys_release_block,
+    [SYS_show_buf]    sys_show_buf,
+    [SYS_write_block] sys_write_block,
 };
 
 // 系统调用

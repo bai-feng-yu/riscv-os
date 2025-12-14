@@ -20,7 +20,7 @@
 #include "syscall-h/syscall.h"
 #include "proc-h/proc.h"
 #include "defs.h"
-
+#include "buf.h"
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
 static int
@@ -604,5 +604,66 @@ uint64 sys_free_block(void) {
     
     end_op();
     
+    return 0;
+}
+
+uint64 sys_show_buf(void) {
+    buf_print();
+    return 0;
+}
+
+uint64 sys_write_block(void) {
+    uint64 buf_handle;
+    uint64 addr;
+    struct buf *b;
+
+    argaddr(0, &buf_handle);
+    argaddr(1, &addr);
+
+    b = (struct buf*)buf_handle;
+    if(b == 0) return -1;
+
+    begin_op(); // Need op for bwrite? bwrite calls virtio_disk_rw. log_write calls bwrite.
+    // If we use logging, we should use log_write. But here we use bwrite directly.
+    // bwrite expects b to be locked. It is locked.
+    
+    if(copyin(myproc()->pgtbl, (char*)b->data, addr, BSIZE) < 0){
+        end_op();
+        return -1;
+    }
+    bwrite(b);
+    end_op();
+    return 0;
+}
+
+
+uint64 sys_read_block(void) {
+    uint64 blockno;
+    uint64 addr;
+    struct buf *b;
+    
+    argint(0, &blockno);
+    argaddr(1, &addr);
+
+    printf(COLOR_BLUE"sys_read_block: reading block %d into addr %p\n"COLOR_RESET, (int)blockno, (void*)addr);
+
+    b = bread(ROOTDEV, (uint)blockno);
+    if(copyout(myproc()->pgtbl, addr, (char*)b->data, BSIZE) < 0) {
+        brelse(b);
+        return 0;
+    }
+    // Return buffer pointer to user, keeping it locked.
+    return (uint64)b;
+}
+
+uint64 sys_release_block(void) {
+    uint64 buf_handle;
+    argaddr(0, &buf_handle);
+    
+    struct buf *b = (struct buf*)buf_handle;
+    if(b == 0) return -1;
+    
+    printf(COLOR_BLUE"sys_release_block: releasing buf_id=%p\n"COLOR_RESET, (void*)b);
+    brelse(b);
     return 0;
 }

@@ -96,6 +96,46 @@ int main()
 }
 ```
 
+### 2.
+
+耗尽buf测试
+
+![alt text](image-1.png)
+
+运行结果显示，从 state-1 到 state-5 的所有测试阶段均已通过，且输出符合预期：
+
+State-1: 初始状态。
+
+![alt text](image-2.png)
+
+State-2: 申请并写入了 6 个 buffer (block 100-105)。
+
+![alt text](image-3.png)
+
+State-3: 释放了 buffer 0 (block 100) 和 3 (block 103)。
+
+![alt text](image-4.png)
+
+State-4: 重新申请了 block 106 和 103。可以看到 block 103 复用了之前的 buffer（LRU 机制生效）。
+
+![alt text](image-5.png)
+
+State-5: 释放所有 buffer，引用计数归零。
+
+![alt text](image-6.png)
+
+3. inode写入
+
+![alt text](image-7.png)
+数据一致性测试通过：fsinit test success表明写入和读取的数据完全一致
+文件系统功能正常：
+成功创建了inode（编号4）
+写操作正确执行（两次writei）
+读操作正确执行（readi读取全部数据）
+磁盘块分配正常：
+初始时addrs全为0
+写入后分配了块50和51，符合预期
+文件大小更新正确：size从0变为2048（2 * BSIZE，假设BSIZE=1024）
 ## 任务列表与问题解答
 
 ### 任务1：理解 xv6 文件系统布局

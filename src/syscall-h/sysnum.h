@@ -24,12 +24,14 @@
 #define SYS_unlink       19
 
 //用于测试：
-#define SYS_alloc_block  20
-#define SYS_free_block   21
+#define SYS_read_block   20
+#define SYS_release_block 21
+#define SYS_show_buf    22
+#define SYS_write_block 23
 
-#define SYS_debug        23
+#define SYS_debug        31
 
-#define SYS_MAX          23
+#define SYS_MAX          31
 
 
 
