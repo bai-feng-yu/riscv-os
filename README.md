@@ -1,6 +1,6 @@
 # WHU 操作系统实践课程代码
 
-## 目录结构（Lab-5 更新）
+## 目录结构
 ```
 Makefile                 顶层构建脚本
 README.md                项目说明
@@ -71,7 +71,9 @@ src/                     内核源码根目录
 > 说明：`build/` 目录在构建过程中临时生成对象文件，不在此总览中列出；`kernel/` 保留最终产物与符号/反汇编方便调试。
 
 ## 更新说明
-- Lab5 引入 `syscall/` 与 `syscall-h/` 目录以拆分系统调用分发与架构相关辅助。
-- 新增 `document/lab5.md` 记录系统调用实验设计与问题回答。
-- 进程与陷阱路径中增加调试日志（可后续通过宏关闭）。
+- **Lab6:** 实现进程管理与调度，包括上下文切换（`swtch.S`）、轮转调度器、`sleep/wakeup` 同步原语。
+- 已添加并记录 `document/lab6.md`，包含实现说明、测试代码与运行结果截图。
+- 主要修改模块：`src/proc/`（`proc.c`, `cpu.c`, `swtch.S`）、`src/proc-h/`（`proc.h`, `cpu.h`）、`src/trap/`（`trap_kernel.c`, `trap_user.c`, `kernelvec.S`, `trampoline.S`）、`src/sync/`（锁与条件等待实现）、以及用户态测试程序（`user/`）。
+- 增强了调度与同步的测试用例（进程切换、僵尸回收、互斥/条件等待验证）。
+- 如需更详细的实现细节与调试步骤，请参阅 `document/lab6.md`。
 
