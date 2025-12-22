@@ -5,10 +5,11 @@
 #include "spinlock.h"
 
 // 页表类型定义
-typedef uint64* pgtbl_t;
+typedef uint64 *pgtbl_t;
 
 // context 定义
-typedef struct context {
+typedef struct context
+{
     uint64 ra; // 返回地址
     uint64 sp; // 栈指针
 
@@ -28,13 +29,14 @@ typedef struct context {
 } context_t;
 
 // trapframe 定义
-typedef struct trapframe {
+typedef struct trapframe
+{
     /*   0 */ uint64 kernel_satp;   // kernel page table
     /*   8 */ uint64 kernel_sp;     // top of process's kernel stack
     /*  16 */ uint64 kernel_trap;   // usertrap()
     /*  24 */ uint64 epc;           // saved user program counter
     /*  32 */ uint64 kernel_hartid; // saved kernel tp
-    
+
     /*  40 */ uint64 ra;
     /*  48 */ uint64 sp;
     /*  56 */ uint64 gp;
@@ -68,49 +70,62 @@ typedef struct trapframe {
     /* 280 */ uint64 t6;
 } trapframe_t;
 
-enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+enum procstate
+{
+    UNUSED,
+    USED,
+    SLEEPING,
+    RUNNABLE,
+    RUNNING,
+    ZOMBIE
+};
 
 // 进程定义
-typedef struct proc {
-    int pid;                 // 标识符
+typedef struct proc
+{
+    int pid; // 标识符
 
     struct spinlock lock;
 
     // p->lock must be held when using these:
-    enum procstate state;        // Process state
-    struct proc* parent;     // 父进程
-    void *chan;                  // If non-zero, sleeping on chan
-    int killed;                  // If non-zero, have been killed
-    int exit_state;          // 进程退出时的状态(父进程可能关心)
-    void* sleep_space;       // 睡眠是为在等待什么
+    enum procstate state; // Process state
+    struct proc *parent;  // 父进程
+    void *chan;           // If non-zero, sleeping on chan
+    int killed;           // If non-zero, have been killed
+    int exit_state;       // 进程退出时的状态(父进程可能关心)
+    void *sleep_space;    // 睡眠是为在等待什么
 
-    pgtbl_t pgtbl;           // 用户态页表
-    uint64 ustack_pages;     // 用户栈占用的页面数量
-    trapframe_t* tf;         // 用户态内核态切换时的运行环境暂存空间
+    pgtbl_t pgtbl;              // 用户态页表
+    uint64 ustack_pages;        // 用户栈占用的页面数量
+    trapframe_t *tf;            // 用户态内核态切换时的运行环境暂存空间
 
-    uint64 sz;               // Size of process memory (bytes) 也是用户堆顶
-    uint64 kstack;           // 内核栈的虚拟地址
-    context_t ctx;           // 内核态进程上下文
+    struct file *ofile[NOFILE]; // Open files
+    struct inode *cwd;          // Current directory
+
+    uint64 sz;                  // Size of process memory (bytes) 也是用户堆顶
+    uint64 kstack;              // 内核栈的虚拟地址
+    context_t ctx;              // 内核态进程上下文
 } proc_t;
-
 
 // ==== 来自 proc.c 的函数声明 ====
 // 获取一个初始化好的用户页表，并完成 trampoline 与 trapframe 映射
-pgtbl_t     proc_pgtbl_init(uint64 trapframe);
+pgtbl_t proc_pgtbl_init(uint64 trapframe);
 // 创建第一个用户进程并进行第一次上下文切换（进入用户返回路径）
-void        userinit(void);
-void        procinit(void);
-void        freeproc(struct proc *p);
-void        proc_mapstacks(pgtbl_t kpgtbl);
-int         growproc(int n);
-int         fork(void);
-int         wait(uint64 addr);
-void        setkilled(struct proc *p);
-int         killed(struct proc *p);
-void        exit(int status);
-void        sleep(void *chan, struct spinlock *lk);
-void        wakeup(void *chan);
-int         kill(int pid);
+void userinit(void);
+void procinit(void);
+void freeproc(struct proc *p);
+void proc_mapstacks(pgtbl_t kpgtbl);
+int growproc(int n);
+int fork(void);
+int wait(uint64 addr);
+void setkilled(struct proc *p);
+int killed(struct proc *p);
+void exit(int status);
+void sleep(void *chan, struct spinlock *lk);
+void wakeup(void *chan);
+int kill(int pid);
+int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
+int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 
 extern struct proc proc[NPROC];
 

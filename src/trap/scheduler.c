@@ -29,7 +29,7 @@ scheduler(void)
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
-        
+        // printf(" running process %d\n", p->pid);
         // 切换到选中的进程。进程有责任释放其锁
         // 然后在跳回调度器之前重新获取锁
         p->state = RUNNING;
@@ -39,6 +39,7 @@ scheduler(void)
         // 进程暂时运行完毕
         // 它应该在返回之前改变了p->state
         c->proc = 0;
+        // printf(" process %d finished running\n", p->pid);
       }
       release(&p->lock);
     }

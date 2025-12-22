@@ -274,3 +274,106 @@ void uvmfree(pagetable_t pagetable, uint64 sz)
   }
   freewalk(pagetable);
 }
+
+
+// 从内核复制到用户
+// 将len字节从src复制到给定页表中的虚拟地址dstva
+// 成功返回0，错误返回-1
+int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
+{
+  uint64 bytes_to_copy, page_va, page_pa;
+
+  while (len > 0)
+  {
+    page_va = PGROUNDDOWN(dstva);
+    page_pa = walkaddr(pagetable, page_va);
+    if (page_pa == 0)
+      return -1; // 页面映射不存在或不可访问
+
+    bytes_to_copy = bytes_to_copy_in_page(dstva, len);
+
+    uint64 dest_offset = dstva - page_va;
+    memmove((void *)(page_pa + dest_offset), src, bytes_to_copy);
+
+    len -= bytes_to_copy;
+    src += bytes_to_copy;
+    dstva = page_va + PGSIZE; // 移到下一页
+  }
+  return 0;
+}
+
+// 从用户复制到内核
+// 将len字节从给定页表中的虚拟地址srcva复制到dst
+// 成功返回0，错误返回-1
+int copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
+{
+  uint64 bytes_to_copy, page_va, page_pa;
+
+  while (len > 0)
+  {
+    page_va = PGROUNDDOWN(srcva);
+    page_pa = walkaddr(pagetable, page_va);
+    if (page_pa == 0)
+      return -1; // 页面映射不存在或不可访问
+
+    bytes_to_copy = bytes_to_copy_in_page(srcva, len);
+
+    uint64 src_offset = srcva - page_va;
+    memmove(dst, (void *)(page_pa + src_offset), bytes_to_copy);
+
+    len -= bytes_to_copy;
+    dst += bytes_to_copy;
+    srcva = page_va + PGSIZE; // 移到下一页
+  }
+  return 0;
+}
+
+// 从用户复制一个以null结尾的字符串到内核
+// 将字节从给定页表中的虚拟地址srcva复制到dst，
+// 直到遇到'\0'或达到max
+// 成功返回0，错误返回-1
+int copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
+{
+  uint64 n, va0, pa0;
+  int got_null = 0;
+
+  while (got_null == 0 && max > 0)
+  {
+    va0 = PGROUNDDOWN(srcva);
+    pa0 = walkaddr(pagetable, va0);
+    if (pa0 == 0)
+      return -1;
+    n = PGSIZE - (srcva - va0);
+    if (n > max)
+      n = max;
+
+    char *p = (char *)(pa0 + (srcva - va0));
+    while (n > 0)
+    {
+      if (*p == '\0')
+      {
+        *dst = '\0';
+        got_null = 1;
+        break;
+      }
+      else
+      {
+        *dst = *p;
+      }
+      --n;
+      --max;
+      p++;
+      dst++;
+    }
+
+    srcva = va0 + PGSIZE;
+  }
+  if (got_null)
+  {
+    return 0;
+  }
+  else
+  {
+    return -1;
+  }
+}

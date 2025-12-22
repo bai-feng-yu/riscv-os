@@ -97,14 +97,18 @@ kerneltrap()
     // 如果不是设备中断，那就是内核错误
     printf("scause %p\n", scause);
     printf("sepc=%p stval=%p\n", r_sepc(), r_stval());
+    printf("current process: %p\n", myproc());
     panic("kerneltrap");
   }
 
   // 内核中的进程调度
   // 如果这是定时器中断，则让出 CPU。
   // 允许在内核执行过程中进行进程切换
-  if(which_dev == 2 && myproc() != 0 /*&& myproc()->state == RUNNING*/)
-    yield();
+  if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING){
+    
+     yield();
+  }
+   
 
   // 恢复处理器状态
   // yield() 可能导致一些陷阱发生，
@@ -145,6 +149,11 @@ devintr()
     switch(irq){
     case UART0_IRQ:
       uartintr();           // 处理串口中断
+      break;
+    case VIRTIO0_IRQ:
+      // printf("virtio disk interrupt handling\n");
+      virtio_disk_intr();   // 处理虚拟磁盘中断
+      // printf("virtio disk interrupt handled\n");
       break;
     default:
       if(irq){

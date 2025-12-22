@@ -12,5 +12,9 @@ void syscall(void);
 void arg_uint32(int n, uint32* ip);
 void arg_uint64(int n, uint64* ip);
 void arg_str(int n, char* buf, int maxlen);
+int argstr(int n, char *buf, int max);
+
+#define argint(n, ip)    arg_uint64(n, (uint64*)(ip))
+#define argaddr(n, ip)   arg_uint64(n, (uint64*)(ip))
 
 #endif
