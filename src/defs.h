@@ -47,7 +47,7 @@ int fileread(struct file *, uint64, int n);
 int filestat(struct file *, uint64 addr);
 int filewrite(struct file *, uint64, int n);
 // 修改file->offset (只针对FD_FILE类型的文件)
-uint32 file_lseek(struct file * file, uint32 offset, int flags);
+uint32 file_lseek(struct file *file, uint32 offset, int flags);
 
 // fs.c
 void fsinit(int);
@@ -73,7 +73,7 @@ int writei(struct inode *, int, uint64, uint, uint);
 void itrunc(struct inode *);
 // 测试：
 uint balloc(uint dev);
-void  bfree(int dev, uint bn);
+void bfree(int dev, uint bn);
 void assert(int condition, char *msg); // Added
 
 // log.c
@@ -83,10 +83,10 @@ void begin_op(void);
 void end_op(void);
 
 // pipe.c
-int             pipealloc(struct file**, struct file**);
-void            pipeclose(struct pipe*, int);
-int             piperead(struct pipe*, uint64, int);
-int             pipewrite(struct pipe*, uint64, int);
+int pipealloc(struct file **, struct file **);
+void pipeclose(struct pipe *, int);
+int piperead(struct pipe *, uint64, int);
+int pipewrite(struct pipe *, uint64, int);
 
 // timer.c
 void timer_init();        // 时钟初始化
@@ -138,7 +138,7 @@ void uvmclear(pagetable_t, uint64);
 int uvm_copyin(pagetable_t pgtbl, uint64 dst, uint64 src, uint32 len);
 int uvm_copyout(pagetable_t pgtbl, uint64 dst, uint64 src, uint32 len);
 int uvm_copyin_str(pagetable_t pgtbl, uint64 dst, uint64 src, uint32 maxlen);
-
+void uvmclear(pagetable_t pagetable, uint64 va);
 // plic.c
 void plicinit(void);
 void plicinithart(void);
@@ -167,10 +167,10 @@ void push_off(void);
 void pop_off(void);
 
 // sleeplock.c
-void            acquiresleep(struct sleeplock*);
-void            releasesleep(struct sleeplock*);
-int             holdingsleep(struct sleeplock*);
-void            initsleeplock(struct sleeplock*, char*);
+void acquiresleep(struct sleeplock *);
+void releasesleep(struct sleeplock *);
+int holdingsleep(struct sleeplock *);
+void initsleeplock(struct sleeplock *, char *);
 
 // string.c
 int memcmp(const void *, const void *, uint);
@@ -182,12 +182,12 @@ int strncmp(const char *, const char *, uint);
 char *strncpy(char *, const char *, int);
 
 // syscall.c
-void            argint(int, int*);
-int             argstr(int, char*, int);
-void            argaddr(int, uint64 *);
-int             fetchstr(uint64, char*, int);
-int             fetchaddr(uint64, uint64*);
-void            syscall();
+void argint(int, int *);
+int argstr(int, char *, int);
+void argaddr(int, uint64 *);
+int fetchstr(uint64, char *, int);
+int fetchaddr(uint64, uint64 *);
+void syscall();
 
 // virtio_disk.c
 void virtio_disk_init(void);

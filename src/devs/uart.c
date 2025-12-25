@@ -182,33 +182,18 @@ uartgetc(void)
 void
 uartintr(void)
 {
-  // // 读取和处理到来的字符，对应RX为满的中断
-  // while(1){
-  // 	// 使用uartgetc获取字符
-  // 	// 没有获取到时跳出循环
-  //   int c = uartgetc();
-  //   if(c == -1)
-  //     break;
-    
-  //   // 调用consoleintr函数
-  //   // 这个函数会负责将输入的字符放入console缓冲区
-  //   // 并实时回显用户输入的字符
-  //   // 如果一整行已经到达或者是EOF触发或者缓冲区满
-  //   // 则更新写指针到编辑指针的位置，详情见下
-  //   consoleintr(c);
-  // }
-
-  // // 异步发送缓冲区中的字符，对应TX为空的中断
-  // acquire(&uart_tx_lock);
-  // uartstart();
-  // release(&uart_tx_lock);
-  
-  while(1)
-  {
+  // RX: 将输入字节交给 console 子系统（它会负责回显、行缓冲、wakeup）。
+  while(1){
     int c = uartgetc();
-    if(c == -1) break;
-    consputc(c);
+    if(c == -1)
+      break;
+    consoleintr(c);
   }
+
+  // TX: 发送输出缓冲区中的字符。
+  acquire(&uart_tx_lock);
+  uartstart();
+  release(&uart_tx_lock);
 }
 
 

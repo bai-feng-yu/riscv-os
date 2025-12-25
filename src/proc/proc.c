@@ -7,6 +7,9 @@
 #include "memlayout.h"
 #include "proc-h/proc.h"
 #include "proc-h/cpu.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
 
 extern char initcode_start[];
 extern char initcode_end[];
@@ -78,6 +81,13 @@ forkret(void)
     // printf("proc %d: first user process init\n", myproc()->pid);
     first = 0;
     fsinit(ROOTDEV); //初始化文件系统
+
+    // 临时调试：打印根目录项，便于确认 fs.img 里有哪些文件名。
+    struct inode *root = iget(ROOTDEV, ROOTINO);
+    ilock(root);
+    printf("\n=== debug: root directory entries ===\n");
+    dir_print(root);
+    iunlockput(root);
     // printf("proc %d: first user process init done\n", myproc()->pid);
   }
 
@@ -231,6 +241,19 @@ userinit(void)
 
   // safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
+
+  // 为 init 进程预置标准输入/输出/错误到 console。
+  // 这样用户态的 read/write/printf 才能在没有 "init" 用户程序做 open/dup 的情况下工作。
+  struct file *cf = filealloc();
+  if(cf == 0)
+    panic("userinit: filealloc console");
+  cf->type = FD_DEVICE;
+  cf->major = CONSOLE;
+  cf->readable = 1;
+  cf->writable = 1;
+  p->ofile[0] = cf;
+  p->ofile[1] = filedup(cf);
+  p->ofile[2] = filedup(cf);
 
   p->state = RUNNABLE;
 
@@ -609,4 +632,37 @@ either_copyin(void *dst, int user_src, uint64 src, uint64 len)
     memmove(dst, (char*)src, len);
     return 0;
   }
+}
+// Create a user page table for a given process, with no user memory,
+// but with trampoline and trapframe pages.
+pagetable_t
+proc_pagetable(struct proc *p)
+{
+  pagetable_t pagetable;
+
+  // An empty page table.
+  pagetable = uvmcreate();
+  if(pagetable == 0)
+    return 0;
+
+  // map the trampoline code (for system call return)
+  // at the highest user virtual address.
+  // only the supervisor uses it, on the way
+  // to/from user space, so not PTE_U.
+  if(mappages(pagetable, TRAMPOLINE, PGSIZE,
+              (uint64)trampoline, PTE_R | PTE_X) < 0){
+    uvmfree(pagetable, 0);
+    return 0;
+  }
+
+  // map the trapframe page just below the trampoline page, for
+  // trampoline.S.
+  if(mappages(pagetable, TRAPFRAME, PGSIZE,
+              (uint64)(p->tf), PTE_R | PTE_W) < 0){
+    uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+    uvmfree(pagetable, 0);
+    return 0;
+  }
+
+  return pagetable;
 }

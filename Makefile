@@ -100,38 +100,43 @@ $K/kernel: dirs $(ENTRY_OBJ) $(OBJS_NO_ENTRY) $(SRC)/linker/kernel.ld
 	$(OBJDUMP) -t $K/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $K/kernel.sym
 	
 # # ===== User 程序编译规则 =====
-# # 生成系统调用汇编文件
-# $U/usys.S: $U/usys.pl
-# 	perl $U/usys.pl > $U/usys.S
+# ===== User 程序编译规则（简化版）=====
+ULIB_OBJS=\
+	$U/start.o\
+	$U/user_lib.o\
+	$U/user_syscall.o\
 
-# # 编译系统调用汇编文件
-# $U/usys.o: $U/usys.S
-# 	$(CC) $(CFLAGS) -c -o $U/usys.o $U/usys.S
+UPROGS=\
+	$U/_test\
 
-# 创建入口点对象文件（确保在开头）
-$U/start.o: $U/start.S
-	$(CC) $(CFLAGS) -c -o $@ $<
+# 用户程序编译标志
+UCFLAGS = $(CFLAGS) -I$U -I. -I$(SRC)
 
-# # 编译 initcode.c 为 ELF 文件
-$U/initcode.o: $U/initcode.c # $U/user.h
-	$(CC) $(CFLAGS) -march=rv64g -nostdinc -I. -I$(SRC) -c $U/initcode.c -o $U/initcode.o
+# 通用规则：从.c文件编译.o文件
+$U/%.o: $U/%.c
+	$(CC) $(UCFLAGS) -c -o $@ $<
 
-# # 编译 printf.c 为 ELF 文件
-# $U/printf.o: $U/printf.c $U/user.h
-# 	$(CC) $(CFLAGS) -march=rv64g -I. -I$(SRC) -c $U/printf.c -o $U/printf.o
+# 通用规则：从.S文件编译.o文件（用于 _start 等入口汇编）
+$U/%.o: $U/%.S
+	$(CC) $(UCFLAGS) -c -o $@ $<
 
-# # 链接生成 initcode ELF 文件
-$U/initcode: $U/start.o $U/initcode.o $U/user.ld #$U/usys.o $U/printf.o $U/user-riscv.ld
-# 	$(LD) $(LDFLAGS) -T $U/user.ld -o $U/initcode $U/initcode.o    $U/usys.o $U/printf.o
-	$(LD) $(LDFLAGS) -T $U/user.ld -o $U/initcode $U/start.o $U/initcode.o
-	$(OBJDUMP) -S $U/initcode > $U/initcode.asm
-	$(OBJDUMP) -t $U/initcode | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $U/initcode.sym
-	rm -f $U/initcode.d $U/initcode.o $U/initcode.out $U/start.o $U/start.d $U/initcode.sym 
+# 通用规则：从.o文件链接成用户程序
+$U/_%: $U/%.o $(ULIB_OBJS)
+	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $^
 
-# # 从 ELF 文件生成二进制文件
-$U/initcode.bin: $U/initcode
-	$(OBJCOPY) -S -O binary $< $@
-	rm -f $U/initcode.d $U/initcode
+# initcode生成规则
+$U/initcode.bin: $U/initcode.c $U/start.S
+	$(CC) $(UCFLAGS) -march=rv64g -nostdinc -c $U/initcode.c -o $U/initcode.o
+	$(CC) $(UCFLAGS) -march=rv64g -nostdinc -c $U/start.S -o $U/start.o
+	$(LD) $(LDFLAGS) -N -e _start -Ttext 0 -o $U/initcode.out $U/start.o $U/initcode.o
+	$(OBJCOPY) -S -O binary $U/initcode.out $@
+	rm -f $U/initcode.o $U/initcode.out
+
+.PHONY: UPROGS ULIB clean build
+
+build: $(ULIB_OBJS) $(UPROGS)
+
+
 
 # tags: $(OBJS) _init
 # 	etags *.S *.c
@@ -159,6 +164,7 @@ clean:
 	rm -f $U/initcode $U/initcode.o $U/initcode.asm $U/initcode.sym $U/initcode.d $U/initcode.bin $U/start.o $U/start.d
 	rm -f $U/usys.S $U/usys.o $U/usys.d
 	rm -f $U/printf.o $U/printf.d
+	rm -f $U/*.o $U/*.d $U/_* $U/*.asm  
 	rm -rf $(BUILD_DIR)
 
 

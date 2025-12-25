@@ -21,6 +21,7 @@ static uint64 (*syscalls[])(void) = {
     [SYS_kill]          sys_kill,
     [SYS_getpid]        sys_getpid,
     [SYS_debug]         sys_debug,
+    [SYS_exec]          sys_exec,
     [SYS_open]         sys_open,
     [SYS_close]        sys_close,
     [SYS_read]         sys_read,
@@ -50,7 +51,13 @@ void syscall(void)
     if(num >= 0 && num < NELEM(syscalls) && syscalls[num]) {
         // Use num to lookup the system call function for num, call it,
         // and store its return value in p->trapframe->a0
-        p->tf->a0 = syscalls[num]();
+        uint64 ret = syscalls[num]();
+        // 重新获取当前进程/Trapframe，避免在开启中断后被破坏的寄存器值
+        //（例如嵌套陷阱/上下文切换导致的寄存器不一致）。
+        p = myproc();
+        if(p == 0 || p->tf == 0)
+            panic("syscall: no proc/tf");
+        p->tf->a0 = ret;
     } else {
         printf("pid %d: unknown sys call %d\n",
                 p->pid, num);

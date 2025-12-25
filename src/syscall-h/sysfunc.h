@@ -12,6 +12,8 @@ uint64 sys_wait();
 uint64 sys_exit();
 uint64 sys_sleep();
 
+uint64 sys_exec(void);
+
 uint64 sys_debug(void);
 
 // 文件系统相关的系统调用
